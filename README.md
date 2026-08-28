@@ -44,8 +44,18 @@ uploader cannot pick its own path or overwrite somebody else's logo.
   on the board.
 - **Paid in full at bid time.** No deposit, no hold, no capture step. Being
   outbid is **not refunded** — the payment buys the time the logo spends on the
-  ass, and that time happened. The one refund path is a payment confirming
-  after someone already bid higher, where the logo never went on at all.
+  ass, and that time happened.
+- **Nothing is ever refunded automatically.** A payment confirming after
+  someone already bid higher never went on the ass at all, so the webhook
+  FLAGS it (`bids.refund_due_at`) and leaves the decision to a human. That flag
+  is the whole reason a manual refund is possible rather than merely intended:
+
+  ```bash
+  npm run auction:refunds              # what is owed
+  npm run auction:refunds -- --pay 42  # refund bid 42, one at a time
+  ```
+
+  Listing is the default and touches nothing.
 - **Anti-snipe:** any bid inside the final 5 minutes pushes that zone's close to
   5 minutes from now. Extensions reset the clock rather than stacking, so the
   auction cannot be compounded into next year.

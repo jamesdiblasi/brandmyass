@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { activateBid, cancelBid } from '@/lib/auction'
-import { refundPayment, verifyWebhook } from '@/lib/stripe'
+import { verifyWebhook } from '@/lib/stripe'
 import { handleStripeEvent, type BidPaymentRecord, type WebhookDeps } from '@/lib/webhook'
 import { query, queryOne } from '@/lib/db'
 
@@ -108,12 +108,12 @@ const deps: WebhookDeps = {
 
   activateBid,
   cancelBid,
-  refund: refundPayment,
 
-  async markRefunded(bidId) {
-    await query('update bids set refunded_at = coalesce(refunded_at, now()), updated_at = now() where id = $1', [
-      bidId,
-    ])
+  async flagRefundDue(bidId) {
+    await query(
+      'update bids set refund_due_at = coalesce(refund_due_at, now()), updated_at = now() where id = $1',
+      [bidId],
+    )
   },
 }
 

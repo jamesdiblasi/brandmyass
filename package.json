@@ -14,7 +14,8 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:setup": "npm run db:create && npm run db:migrate && npm run db:seed",
-    "auction:settle": "tsx scripts/settle.ts"
+    "auction:settle": "tsx scripts/settle.ts",
+    "auction:refunds": "tsx scripts/refunds.ts"
   },
   "dependencies": {
     "@azure/storage-blob": "^12.28.0",

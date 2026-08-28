@@ -54,8 +54,12 @@ export interface WebhookDeps {
   recordPayment(bidId: number, paymentIntentId: string): Promise<void>
   activateBid(bidId: number): Promise<ActivationResult>
   cancelBid(bidId: number): Promise<void>
-  refund(paymentIntentId: string): Promise<void>
-  markRefunded(bidId: number): Promise<void>
+  /**
+   * Flags a payment as owed a refund. It does NOT move money — refunds are
+   * issued by hand. Without this flag the queue would be invisible, and an
+   * invisible refund queue is indistinguishable from not refunding.
+   */
+  flagRefundDue(bidId: number): Promise<void>
   log?: (message: string, ...rest: unknown[]) => void
 }
 
@@ -66,8 +70,8 @@ export type WebhookOutcome =
   | { status: 'ignored'; reason: string }
   /** The bid is now (or was already) the standing bid. */
   | { status: 'activated'; bidId: number }
-  /** Paid, never displayed, money returned. */
-  | { status: 'refunded'; bidId: number }
+  /** Paid, never displayed. Flagged for a human to refund. */
+  | { status: 'refund_due'; bidId: number }
   /** Paid, displayed, later outbid. Keeps the money, by design. */
   | { status: 'kept'; bidId: number }
   /** A pending bid was marked abandoned. */
@@ -232,18 +236,23 @@ async function onSucceeded(
       return { status: 'kept', bidId }
 
     case 'too_late': {
-      // The one refund path. This logo never went on: somebody was already
-      // higher, or the zone closed, or the bid was abandoned before the card
-      // came good. Nothing was sold, so nothing is kept.
+      // Paid, but the logo never went on: somebody was already higher, or the
+      // zone had closed, or the bid was abandoned before the card came good.
       //
-      // A throw here is deliberate. It drops the event claim and returns 500,
-      // so Stripe retries and the refund is attempted again — a failed refund
-      // is somebody out of pocket for nothing, which is worth three days of
-      // retries rather than a log line nobody reads.
-      await deps.refund(intent.id)
-      await deps.markRefunded(bidId)
-      log(`[webhook] bid ${bidId} paid too late to be displayed — refunded in full`)
-      return { status: 'refunded', bidId }
+      // Nothing is refunded automatically — that is the owner's call, made by
+      // hand. What this must do is make the case findable, because a manual
+      // refund nobody knows about does not happen. The flag is the queue that
+      // `npm run auction:refunds` reads.
+      //
+      // The throw-and-retry that used to guard the refund is gone with it: a
+      // flag write that fails still throws (below, via the caller), so the
+      // claim is dropped and Stripe's redelivery re-flags it.
+      await deps.flagRefundDue(bidId)
+      log(
+        `[webhook] bid ${bidId} paid but was never displayed — FLAGGED FOR MANUAL REFUND ` +
+          `(intent ${intent.id}). Nothing was refunded automatically.`,
+      )
+      return { status: 'refund_due', bidId }
     }
 
     case 'unknown_bid':

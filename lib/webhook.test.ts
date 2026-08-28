@@ -64,8 +64,7 @@ function mockDeps(overrides: Partial<WebhookDeps> = {}) {
     recordPayment: vi.fn(async () => {}),
     activateBid: vi.fn(async () => activation()),
     cancelBid: vi.fn(async () => {}),
-    refund: vi.fn(async () => {}),
-    markRefunded: vi.fn(async () => {}),
+    flagRefundDue: vi.fn(async () => {}),
     log: vi.fn(),
     ...overrides,
   } as unknown as WebhookDeps & Record<string, ReturnType<typeof vi.fn>>
@@ -109,7 +108,7 @@ describe('payment_intent.succeeded — promotion', () => {
     expect(out).toEqual({ status: 'activated', bidId: 7 })
     expect(deps.recordPayment).toHaveBeenCalledWith(7, 'pi_bid7')
     expect(deps.activateBid).toHaveBeenCalledWith(7)
-    expect(deps.refund).not.toHaveBeenCalled()
+    expect(deps.flagRefundDue).not.toHaveBeenCalled()
     expect(deps.completeEvent).toHaveBeenCalledWith('evt_1')
   })
 
@@ -122,7 +121,7 @@ describe('payment_intent.succeeded — promotion', () => {
     const out = await handleStripeEvent(event('payment_intent.succeeded', intent()), deps)
 
     expect(out).toEqual({ status: 'activated', bidId: 7 })
-    expect(deps.refund).not.toHaveBeenCalled()
+    expect(deps.flagRefundDue).not.toHaveBeenCalled()
   })
 
   it("ignores another application's payment without touching the database", async () => {
@@ -133,18 +132,28 @@ describe('payment_intent.succeeded — promotion', () => {
     expect(out.status).toBe('ignored')
     expect(deps.loadBid).not.toHaveBeenCalled()
     expect(deps.activateBid).not.toHaveBeenCalled()
-    expect(deps.refund).not.toHaveBeenCalled()
+    expect(deps.flagRefundDue).not.toHaveBeenCalled()
   })
 })
 
-describe('payment_intent.succeeded — the one refund path', () => {
-  it('refunds a payment that cleared after somebody had gone higher', async () => {
+describe('payment_intent.succeeded — money never moves on its own', () => {
+  it('flags, but does not refund, a payment that cleared after somebody had gone higher', async () => {
+    // Refunds are a human decision here. The handler's whole job in this case
+    // is to make it findable — an unflagged one is a refund nobody learns is
+    // owed.
     const deps = mockDeps({ activateBid: vi.fn(async () => activation({ outcome: 'too_late' })) })
     const out = await handleStripeEvent(event('payment_intent.succeeded', intent()), deps)
 
-    expect(out).toEqual({ status: 'refunded', bidId: 7 })
-    expect(deps.refund).toHaveBeenCalledWith('pi_bid7')
-    expect(deps.markRefunded).toHaveBeenCalledWith(7)
+    expect(out).toEqual({ status: 'refund_due', bidId: 7 })
+    expect(deps.flagRefundDue).toHaveBeenCalledWith(7)
+  })
+
+  it('never moves money by itself on any path', async () => {
+    // A standing guard: nothing in these deps can issue a refund, so if a
+    // future change reintroduces one this suite stops compiling rather than
+    // quietly paying people back.
+    const deps = mockDeps()
+    expect('refund' in deps).toBe(false)
   })
 
   it('keeps the money of a bid that was displayed and later outbid', async () => {
@@ -152,21 +161,21 @@ describe('payment_intent.succeeded — the one refund path', () => {
     const out = await handleStripeEvent(event('payment_intent.succeeded', intent()), deps)
 
     expect(out).toEqual({ status: 'kept', bidId: 7 })
-    expect(deps.refund).not.toHaveBeenCalled()
+    expect(deps.flagRefundDue).not.toHaveBeenCalled()
   })
 
-  it('fails the delivery when the refund does not go through, so Stripe retries', async () => {
-    // A refund that silently fails is a person out of pocket for a logo that
-    // never went on. Better to bounce the webhook and get another attempt.
+  it('fails the delivery when the flag cannot be written, so Stripe retries', async () => {
+    // A flag that silently fails to save is worse than no flag: the money is
+    // taken, the logo never went on, and nothing anywhere records that anyone
+    // is owed. Better to bounce the webhook and get another attempt.
     const deps = mockDeps({
       activateBid: vi.fn(async () => activation({ outcome: 'too_late' })),
-      refund: vi.fn(async () => {
-        throw new Error('Stripe is having a day')
+      flagRefundDue: vi.fn(async () => {
+        throw new Error('database is having a day')
       }),
     })
 
     await expect(handleStripeEvent(event('payment_intent.succeeded', intent()), deps)).rejects.toThrow()
-    expect(deps.markRefunded).not.toHaveBeenCalled()
     expect(deps.completeEvent).not.toHaveBeenCalled()
     expect(deps.releaseEvent).toHaveBeenCalledWith('evt_1')
   })
@@ -183,7 +192,7 @@ describe('payment_intent.succeeded — refusing what does not add up', () => {
     expect(deps.activateBid).not.toHaveBeenCalled()
     // Nothing is refunded on a state we do not understand either — a wrong
     // refund on a shared Stripe account is unrecoverable.
-    expect(deps.refund).not.toHaveBeenCalled()
+    expect(deps.flagRefundDue).not.toHaveBeenCalled()
   })
 
   it('will not let a cheaper payment buy a more expensive placement', async () => {
@@ -193,7 +202,7 @@ describe('payment_intent.succeeded — refusing what does not add up', () => {
 
     expect(out.status).toBe('mismatch')
     expect(deps.activateBid).not.toHaveBeenCalled()
-    expect(deps.refund).not.toHaveBeenCalled()
+    expect(deps.flagRefundDue).not.toHaveBeenCalled()
   })
 
   it('does not refund on a bid id that does not exist', async () => {
@@ -201,7 +210,7 @@ describe('payment_intent.succeeded — refusing what does not add up', () => {
     const out = await handleStripeEvent(event('payment_intent.succeeded', intent()), deps)
 
     expect(out.status).toBe('mismatch')
-    expect(deps.refund).not.toHaveBeenCalled()
+    expect(deps.flagRefundDue).not.toHaveBeenCalled()
   })
 
   it('backfills the intent id on a bid that has none recorded', async () => {
@@ -225,10 +234,12 @@ describe('idempotency', () => {
     expect(second).toEqual({ status: 'duplicate' })
     expect(deps.activateBid).toHaveBeenCalledTimes(1)
     expect(deps.recordPayment).toHaveBeenCalledTimes(1)
-    expect(deps.refund).not.toHaveBeenCalled()
+    expect(deps.flagRefundDue).not.toHaveBeenCalled()
   })
 
-  it('does not refund twice when a refunded event is redelivered', async () => {
+  it('does not flag twice when a flagged event is redelivered', async () => {
+    // One flag per payment. A redelivery must not put the same person into the
+    // refund queue a second time and invite paying them twice by hand.
     const deps = mockDeps({ activateBid: vi.fn(async () => activation({ outcome: 'too_late' })) })
     const e = event('payment_intent.succeeded', intent(), 'evt_refund')
 
@@ -236,17 +247,17 @@ describe('idempotency', () => {
     const second = await handleStripeEvent(e, deps)
 
     expect(second).toEqual({ status: 'duplicate' })
-    expect(deps.refund).toHaveBeenCalledTimes(1)
+    expect(deps.flagRefundDue).toHaveBeenCalledTimes(1)
   })
 
   it('re-runs the work when a delivery released its claim after failing', async () => {
-    // The self-healing case: the first attempt's refund failed, the claim was
-    // released, and Stripe's retry gets a real second go rather than being told
-    // it is a duplicate.
+    // The self-healing case: the first attempt's flag write failed, the claim
+    // was released, and Stripe's retry gets a real second go rather than being
+    // told it is a duplicate.
     let failing = true
     const deps = mockDeps({
       activateBid: vi.fn(async () => activation({ outcome: 'too_late' })),
-      refund: vi.fn(async () => {
+      flagRefundDue: vi.fn(async () => {
         if (failing) throw new Error('transient')
       }),
     })
@@ -256,8 +267,8 @@ describe('idempotency', () => {
     failing = false
     const second = await handleStripeEvent(e, deps)
 
-    expect(second).toEqual({ status: 'refunded', bidId: 7 })
-    expect(deps.markRefunded).toHaveBeenCalledTimes(1)
+    expect(second).toEqual({ status: 'refund_due', bidId: 7 })
+    expect(deps.flagRefundDue).toHaveBeenCalledTimes(2)
     expect(deps.completeEvent).toHaveBeenCalledTimes(1)
   })
 })
