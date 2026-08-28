@@ -20,7 +20,7 @@ const STEPS = [
   {
     n: '03',
     title: 'I get tattooed. Immediately.',
-    body: 'Your logo goes on as soon as you pay — you do not wait for the auction to end. It stays there, photographed and timestamped, until somebody outbids you, at which point it comes off and theirs goes on. Whoever holds each placement when the clock stops keeps it for the rest of the run.',
+    body: 'Your logo goes on as soon as you pay — you do not wait for the auction to end. Two weeks is the most it can stay there, and it is less than that if somebody outbids you, at which point it comes off and theirs goes on. The website is the part that lasts: it stays up for a year, with your name against every placement you held.',
   },
 ] as const
 
@@ -55,21 +55,25 @@ export function HowItWorks() {
 /* ========================================================================== */
 
 const NUMBERS = [
-  { stat: '1', label: 'Arse', note: 'Total addressable inventory. There will not be a second one.' },
+  {
+    stat: '1',
+    label: 'Arse',
+    note: 'Total addressable inventory. There are no competing arses in this market, so share of voice is a clean 100%.',
+  },
   {
     stat: '~14,000',
     label: 'Weekly impressions',
     note: 'Estimated generously. Includes a gym, two beaches, one open-plan office and one regrettable work Christmas party.',
   },
   {
-    stat: '100%',
-    label: 'Share of voice',
-    note: 'There are currently no competing arses in this market. First-mover advantage is real.',
+    stat: '2 weeks',
+    label: 'Maximum time on me',
+    note: 'The ceiling, not the promise. Somebody outbids you and it comes off early — that is the entire game.',
   },
   {
-    stat: '2 weeks',
-    label: 'Campaign length',
-    note: 'Short on purpose. Get outbid and your square centimetre goes to whoever wanted it more.',
+    stat: '1 year',
+    label: 'Time on this website',
+    note: 'The tattoo is temporary. The receipt is not: this page stays up for a year with your logo on the placement you bought.',
   },
 ] as const
 
@@ -176,7 +180,7 @@ const FAQ = [
   ['Is this real?', 'Distressingly. There is a database, a payment processor and a man with a printer full of temporary tattoo paper.'],
   [
     'Is it a permanent tattoo?',
-    'No. Temporary, and it runs two weeks. If you want permanent, that is a different conversation and a very different number, and you should probably sit down before you have it.',
+    'No. Temporary, and two weeks is the ceiling — less if somebody outbids you first. The lasting part is this website, which stays up for a year with your logo sitting on the placement you paid for.',
   ],
   [
     'Do I get proof?',
@@ -184,7 +188,7 @@ const FAQ = [
   ],
   [
     'What happens if I get outbid?',
-    'Your tattoo comes off and theirs goes on. You are not refunded, and I want to be completely unambiguous about that: the payment bought the time your logo spent on me, and it spent it. The only refund that exists is if your payment lands after someone has already gone higher, in which case your logo never went on at all and you get every cent back automatically.',
+    'Your tattoo comes off and theirs goes on, and you keep your place in the record on this website for the year it stays up. You are not refunded, and I want to be completely unambiguous about that: the payment bought the time your logo spent on me, and it spent it. The only refund that exists is if your payment lands after someone has already gone higher, in which case your logo never went on at all and you get every cent back automatically.',
   ],
   [
     'Can I buy all nine placements?',
@@ -246,7 +250,7 @@ export function InventoryStrip() {
         <strong className="font-semibold text-ink">{formatMoney(dearest)}</strong>
       </span>
       <span aria-hidden className="text-hairline">•</span>
-      <span>pay now, on me now</span>
+      <span>two weeks on me, a year on here</span>
     </div>
   )
 }

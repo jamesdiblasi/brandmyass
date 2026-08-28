@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: `${SITE.name} — ${SITE.tagline}`,
     description:
-      'Live auction for nine temporary-tattoo advertising placements on one man. Pay and your logo goes on. Get outbid and it comes off.',
+      'Live auction for nine temporary-tattoo advertising placements on one man. Pay and your logo goes on for up to two weeks. Get outbid and it comes off. The site stays up for a year.',
     type: 'website',
     url: SITE.baseUrl,
   },

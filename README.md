@@ -3,8 +3,10 @@
 Premium out-of-home advertising. On my arse.
 
 Nine placements on one backside, sold by live auction, applied as temporary
-tattoos for two weeks. Every bid is **charged in full** the moment it is placed;
-your logo goes on immediately and comes off when somebody pays more.
+tattoos for **at most two weeks** — less if somebody outbids you. Every bid is
+**charged in full** the moment it is placed; your logo goes on immediately and
+comes off when somebody pays more. The site itself stays up for a year, so the
+record of who held what outlives the tattoos.
 
 ---
 
