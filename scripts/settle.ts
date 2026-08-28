@@ -1,12 +1,11 @@
 /**
- * Closes out every zone whose clock has expired and captures the winners'
- * deposits. Safe to run on a schedule — settlement is idempotent per zone.
+ * Closes out every zone whose clock has expired and records the winner.
  *
  *   npm run auction:settle
  *
- * Run it at least daily. Stripe expires an uncaptured authorisation after
- * roughly seven days, so a campaign longer than that needs this job (or a
- * re-authorisation flow) to avoid winners' holds lapsing.
+ * No money moves: every bid was charged when it was placed. That makes this job
+ * a bookkeeping step rather than a financial one, and means forgetting to run
+ * it cannot cost anybody anything — it only delays the board saying "closed".
  */
 import { config } from 'dotenv'
 
@@ -15,7 +14,6 @@ config()
 
 async function main(): Promise<void> {
   const { settleClosedZones } = await import('../lib/auction')
-  const { captureHold } = await import('../lib/stripe')
   const { formatMoney } = await import('../lib/money')
   const { query, closePool } = await import('../lib/db')
   const { getZone } = await import('../lib/zones')
@@ -30,20 +28,7 @@ async function main(): Promise<void> {
 
   for (const w of winners) {
     const zoneName = getZone(w.zoneId)?.name ?? w.zoneId
-    if (!w.paymentIntentId) {
-      console.warn(`! ${zoneName}: winner has no PaymentIntent — settle by hand (bid ${w.bidId})`)
-      continue
-    }
-    try {
-      await captureHold(w.paymentIntentId)
-      await query('update bids set hold_captured_at = now(), updated_at = now() where id = $1', [w.bidId])
-      console.log(
-        `✓ ${zoneName} → ${w.sponsorName} at ${formatMoney(w.amountCents)} ` +
-          `(deposit ${formatMoney(w.depositCents)} captured; balance ${formatMoney(w.amountCents - w.depositCents)} to invoice)`,
-      )
-    } catch (err) {
-      console.error(`✗ ${zoneName}: capture failed for bid ${w.bidId}`, err)
-    }
+    console.log(`✓ ${zoneName} → ${w.sponsorName} at ${formatMoney(w.amountCents)} — already paid`)
   }
 
   // Mark the whole campaign settled once no zone is left open.

@@ -2,14 +2,17 @@ import Stripe from 'stripe'
 import { CURRENCY } from './config'
 
 /**
- * Stripe, in card-hold mode.
+ * Stripe, in take-the-money mode.
  *
- * The money model here is an AUTHORISATION, not a charge. A bid places a
- * manual-capture PaymentIntent for the deposit, which reserves the funds on the
- * bidder's card without taking them. Being outbid cancels the intent and the
- * hold vanishes; winning captures it. That is what makes "you are never charged
- * unless you win" a true statement rather than a marketing one, and it is why
- * nothing in this codebase ever issues a refund — there is nothing to refund.
+ * A bid is CHARGED IN FULL when it is placed. There is no hold, no deposit and
+ * no capture step: the bidder pays, the logo goes on, and it comes off when
+ * somebody pays more. The money buys display time, not a claim on the outcome,
+ * so being outbid is not refunded.
+ *
+ * There is exactly one refund path, and it is not a courtesy. If a payment
+ * confirms AFTER someone else has already gone higher, that logo never went on
+ * the arse at all — nothing was sold, so the money goes back. Every other
+ * outcome keeps the payment.
  */
 
 // Pinned deliberately: without one, an account-level version bump silently
@@ -28,49 +31,47 @@ export function getStripe(): Stripe {
   return cached
 }
 
-export interface HoldParams {
+export interface ChargeParams {
   bidId: number
   zoneId: string
   zoneName: string
   amountCents: number
-  depositCents: number
   sponsorName: string
   sponsorEmail: string
 }
 
 /**
- * Authorises the deposit. Returns the client secret the browser needs to
- * confirm the card.
+ * Charges the full bid. Returns the client secret the browser needs to confirm
+ * the card.
  *
- * `capture_method: 'manual'` is the entire trick. The bid id goes into metadata
- * because the webhook has to map an authorisation back to a bid, and metadata
- * is the only field that survives the round trip intact.
+ * Automatic capture — the money moves as soon as the card clears. The bid id
+ * goes into metadata because the webhook has to map a payment back to a bid,
+ * and metadata is the only field that survives the round trip intact.
  */
-export async function createDepositHold(
-  params: HoldParams,
+export async function chargeBid(
+  params: ChargeParams,
 ): Promise<{ paymentIntentId: string; clientSecret: string }> {
   const stripe = getStripe()
 
   const intent = await stripe.paymentIntents.create(
     {
-      amount: params.depositCents,
+      amount: params.amountCents,
       currency: CURRENCY,
-      capture_method: 'manual',
       automatic_payment_methods: { enabled: true },
       receipt_email: params.sponsorEmail,
-      description: `Bid deposit — ${params.zoneName} — ${params.sponsorName}`,
+      description: `${params.zoneName} — ${params.sponsorName}`,
       statement_descriptor_suffix: 'BRANDMYASS',
       metadata: {
         bid_id: String(params.bidId),
         zone_id: params.zoneId,
         zone_name: params.zoneName,
-        bid_amount_cents: String(params.amountCents),
         sponsor_name: params.sponsorName,
       },
     },
     // Stripe deduplicates on this key, so a double-submitted bid form cannot
-    // place two holds on the same card for the same bid.
-    { idempotencyKey: `bid-hold-${params.bidId}` },
+    // charge the same card twice for the same bid. This matters more now than
+    // it did with holds: a duplicate here is real money taken twice.
+    { idempotencyKey: `bid-charge-${params.bidId}` },
   )
 
   if (!intent.client_secret) throw new Error('Stripe returned a PaymentIntent with no client secret')
@@ -78,33 +79,23 @@ export async function createDepositHold(
 }
 
 /**
- * Releases a hold. Used when a bidder is outbid, or when their authorisation
- * lands too late to win.
+ * Refunds a payment in full.
  *
- * Cancelling an intent that is already cancelled throws, and Stripe redelivers
- * webhooks, so that specific error is swallowed — a released hold staying
- * released is the outcome we wanted anyway.
+ * Used for exactly one case: a payment that confirmed after somebody had
+ * already bid higher, so the logo never went on. Not used for ordinary
+ * outbidding, which is not refundable.
+ *
+ * Refunding an already-refunded charge throws, and Stripe redelivers webhooks,
+ * so that specific error is swallowed — money already returned staying returned
+ * is the outcome we wanted.
  */
-export async function releaseHold(paymentIntentId: string): Promise<void> {
+export async function refundPayment(paymentIntentId: string): Promise<void> {
   const stripe = getStripe()
   try {
-    await stripe.paymentIntents.cancel(paymentIntentId)
+    await stripe.refunds.create({ payment_intent: paymentIntentId })
   } catch (err) {
     const e = err as Stripe.errors.StripeError
-    if (e?.code === 'payment_intent_unexpected_state') return
-    throw err
-  }
-}
-
-/** Takes the deposit from a winner. */
-export async function captureHold(paymentIntentId: string): Promise<void> {
-  const stripe = getStripe()
-  try {
-    await stripe.paymentIntents.capture(paymentIntentId)
-  } catch (err) {
-    const e = err as Stripe.errors.StripeError
-    // Already captured — a redelivered webhook or a re-run settle job.
-    if (e?.code === 'payment_intent_unexpected_state') return
+    if (e?.code === 'charge_already_refunded') return
     throw err
   }
 }

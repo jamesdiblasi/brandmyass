@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { depositFor, formatMoney, parseMoneyToCents } from './money'
-import { MIN_DEPOSIT_CENTS } from './config'
+import { formatMoney, parseMoneyToCents } from './money'
 
 /**
  * These are the functions standing between a bidder and an incorrect charge on
@@ -28,35 +27,6 @@ describe('parseMoneyToCents', () => {
     // Guessing here costs somebody real money, so ambiguity is rejected.
     for (const bad of ['', 'abc', '1.234', '-50', '1e3', '4 0 0', '$', '.5', '1.2.3']) {
       expect(parseMoneyToCents(bad)).toBeNull()
-    }
-  })
-})
-
-describe('depositFor', () => {
-  it('takes 20%, rounded up to a whole dollar', () => {
-    expect(depositFor(40_000)).toBe(8_000) // $400 -> exactly $80
-    // $666 -> $133.20, and a fractional authorisation is not a thing, so up to $134.
-    expect(depositFor(66_600)).toBe(13_400)
-    expect(depositFor(12_500)).toBe(2_500) // $125 -> exactly $25
-  })
-
-  it('never authorises less than the Stripe-friendly floor', () => {
-    expect(depositFor(100)).toBe(MIN_DEPOSIT_CENTS)
-    expect(depositFor(1)).toBe(MIN_DEPOSIT_CENTS)
-  })
-
-  it('always returns whole dollars', () => {
-    for (const bid of [12_500, 15_000, 20_000, 30_000, 40_000, 66_600, 123_457]) {
-      expect(depositFor(bid) % 100).toBe(0)
-    }
-  })
-
-  it('is monotonic — a higher bid never holds less', () => {
-    let prev = 0
-    for (let bid = 1_000; bid < 500_000; bid += 1_337) {
-      const d = depositFor(bid)
-      expect(d).toBeGreaterThanOrEqual(prev)
-      prev = d
     }
   })
 })

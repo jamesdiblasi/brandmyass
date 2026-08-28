@@ -1,7 +1,6 @@
 import type { PoolClient } from 'pg'
 import { query, queryOne, transaction } from './db'
 import { ZONES, ZONES_BY_ID } from './zones'
-import { depositFor } from './money'
 import { ANTI_SNIPE_EXTENSION_MS, ANTI_SNIPE_WINDOW_MS, MIN_INCREMENT_CENTS } from './config'
 
 /* -------------------------------------------------------------------------- */
@@ -232,16 +231,15 @@ export interface CreatedBid {
   id: number
   zoneId: string
   amountCents: number
-  depositCents: number
 }
 
 /**
- * Records a bid in `pending` and returns it, ready for a card hold.
+ * Records a bid in `pending` and returns it, ready to be charged.
  *
  * A pending bid deliberately does NOT become the standing bid. It is only a
  * claim to have started paying. Promotion happens in `activateBid`, once
- * Stripe confirms the money is actually reachable — otherwise anybody could
- * take a placement off the market for free by typing a big number.
+ * Stripe confirms the money actually moved — otherwise anybody could take a
+ * placement off the market for free by typing a big number.
  */
 export async function createBid(input: CreateBidInput): Promise<CreatedBid> {
   const zone = ZONES_BY_ID.get(input.zoneId)
@@ -265,16 +263,13 @@ export async function createBid(input: CreateBidInput): Promise<CreatedBid> {
       throw new BidError('Somebody has already bid that much or more.', 'too_low', floor.minimumBidCents)
     }
 
-    const depositCents = depositFor(input.amountCents)
-
     const res = await client.query<{ id: number }>(
-      `insert into bids (zone_id, amount_cents, deposit_cents, sponsor_name, sponsor_email, sponsor_url, logo_url, status)
-       values ($1, $2, $3, $4, $5, $6, $7, 'pending')
+      `insert into bids (zone_id, amount_cents, sponsor_name, sponsor_email, sponsor_url, logo_url, status)
+       values ($1, $2, $3, $4, $5, $6, 'pending')
        returning id`,
       [
         input.zoneId,
         input.amountCents,
-        depositCents,
         name,
         email,
         input.sponsorUrl?.trim() || null,
@@ -282,28 +277,30 @@ export async function createBid(input: CreateBidInput): Promise<CreatedBid> {
       ],
     )
 
-    return { id: res.rows[0].id, zoneId: input.zoneId, amountCents: input.amountCents, depositCents }
+    return { id: res.rows[0].id, zoneId: input.zoneId, amountCents: input.amountCents }
   })
 }
 
 export interface ActivationResult {
   outcome: 'activated' | 'too_late' | 'already_settled' | 'unknown_bid'
-  /** PaymentIntent of the bid that just lost the top spot — its hold must be
-   *  released by the caller. Null when nobody was displaced. */
-  releasePaymentIntentId: string | null
+  /** The displaced bid is NOT refunded — it paid for the time its logo spent on
+   *  the arse, and it had that time. Kept here only so the caller can log who
+   *  was knocked off. */
+  displacedBidId: number | null
   /** True when this bid landed inside the anti-snipe window and pushed the clock. */
   extended: boolean
   newClosesAt: string | null
 }
 
 /**
- * Promotes an authorised bid to the standing bid, demoting whoever held it.
+ * Promotes a paid bid to the standing bid, demoting whoever held it.
  *
  * Called from the Stripe webhook, never from a request handler, because only
- * Stripe can tell us the hold is real. Re-validates the amount under a row
- * lock: between the bid being created and the card clearing, somebody else may
- * have gone higher, and in that case this bid loses rather than overwriting a
- * legitimately higher one.
+ * Stripe can tell us the money moved. Re-validates the amount under a row lock:
+ * between the bid being created and the card clearing, somebody else may have
+ * gone higher, and in that case this bid loses rather than overwriting a
+ * legitimately higher one — and because it has already been charged and its
+ * logo never went on, the caller refunds it.
  *
  * Stripe redelivers webhooks, so this is idempotent — a bid that is already
  * active reports success and releases nothing a second time.
@@ -318,14 +315,14 @@ export async function activateBid(bidId: number): Promise<ActivationResult> {
     }>('select id, zone_id, amount_cents, status from bids where id = $1 for update', [bidId])
 
     const bid = bidRes.rows[0]
-    if (!bid) return { outcome: 'unknown_bid', releasePaymentIntentId: null, extended: false, newClosesAt: null }
+    if (!bid) return { outcome: 'unknown_bid', displacedBidId: null, extended: false, newClosesAt: null }
 
     // Replayed webhook for a bid we already promoted.
     if (bid.status === 'active' || bid.status === 'won') {
-      return { outcome: 'activated', releasePaymentIntentId: null, extended: false, newClosesAt: null }
+      return { outcome: 'activated', displacedBidId: null, extended: false, newClosesAt: null }
     }
     if (bid.status !== 'pending') {
-      return { outcome: 'already_settled', releasePaymentIntentId: null, extended: false, newClosesAt: null }
+      return { outcome: 'already_settled', displacedBidId: null, extended: false, newClosesAt: null }
     }
 
     const floor = await lockZoneAndReadFloor(client, bid.zone_id)
@@ -335,19 +332,20 @@ export async function activateBid(bidId: number): Promise<ActivationResult> {
         `update bids set status = 'lost', updated_at = now() where id = $1`,
         [bid.id],
       )
-      return { outcome: 'too_late', releasePaymentIntentId: null, extended: false, newClosesAt: null }
+      return { outcome: 'too_late', displacedBidId: null, extended: false, newClosesAt: null }
     }
 
-    // Demote the incumbent and hand its PaymentIntent back for release.
-    let releasePaymentIntentId: string | null = null
+    // Demote the incumbent. Its money stays where it is — it bought the time
+    // its logo spent on the arse, and that time happened.
+    let displacedBidId: number | null = null
     if (floor.topBidId != null) {
-      const prev = await client.query<{ stripe_payment_intent_id: string | null }>(
+      const prev = await client.query<{ id: number }>(
         `update bids set status = 'outbid', updated_at = now()
          where id = $1 and status = 'active'
-         returning stripe_payment_intent_id`,
+         returning id`,
         [floor.topBidId],
       )
-      releasePaymentIntentId = prev.rows[0]?.stripe_payment_intent_id ?? null
+      displacedBidId = prev.rows[0]?.id ?? null
     }
 
     await client.query(`update bids set status = 'active', updated_at = now() where id = $1`, [bid.id])
@@ -372,7 +370,7 @@ export async function activateBid(bidId: number): Promise<ActivationResult> {
 
     return {
       outcome: 'activated',
-      releasePaymentIntentId,
+      displacedBidId,
       extended,
       newClosesAt: newClosesAt.toISOString(),
     }
@@ -390,15 +388,17 @@ export interface SettlementRow {
   bidId: number
   zoneId: string
   amountCents: number
-  depositCents: number
   sponsorName: string
   sponsorEmail: string
-  paymentIntentId: string | null
 }
 
 /**
  * Closes every zone whose clock has run out, turning the standing bid into a
- * winner. Returns the winners so the caller can capture their holds.
+ * winner. Returns the winners so the caller can announce them.
+ *
+ * No money moves here. Every bid was charged when it was placed, so settlement
+ * is purely a status change — which also means a settle job that fails to run
+ * cannot cost anybody anything.
  *
  * Idempotent via `zone_state.settled`, so the cron can run as often as it likes.
  */
@@ -416,14 +416,12 @@ export async function settleClosedZones(): Promise<SettlementRow[]> {
       const res = await client.query<{
         id: number
         amount_cents: number
-        deposit_cents: number
         sponsor_name: string
         sponsor_email: string
-        stripe_payment_intent_id: string | null
       }>(
         `update bids set status = 'won', updated_at = now()
          where zone_id = $1 and status = 'active'
-         returning id, amount_cents, deposit_cents, sponsor_name, sponsor_email, stripe_payment_intent_id`,
+         returning id, amount_cents, sponsor_name, sponsor_email`,
         [zone_id],
       )
       await client.query(`update zone_state set settled = true, updated_at = now() where zone_id = $1`, [zone_id])
@@ -434,10 +432,8 @@ export async function settleClosedZones(): Promise<SettlementRow[]> {
           bidId: w.id,
           zoneId: zone_id,
           amountCents: w.amount_cents,
-          depositCents: w.deposit_cents,
           sponsorName: w.sponsor_name,
           sponsorEmail: w.sponsor_email,
-          paymentIntentId: w.stripe_payment_intent_id,
         })
       }
     }

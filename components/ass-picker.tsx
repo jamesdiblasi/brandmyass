@@ -145,9 +145,15 @@ export function AssPicker({ states, selectedId, onSelect }: Props) {
           const state = states.get(zone.id)
           const isSelected = selectedId === zone.id
           const tier = TIER_COLOR[zone.tier]
-          const price = state?.topBid
-            ? formatMoney(state.topBid.amountCents)
-            : formatMoney(state?.reserveCents ?? zone.reserveCents)
+          const taken = Boolean(state?.topBid)
+          const logo = state?.topBid?.logoUrl ?? null
+          const price = formatMoney(state?.reserveCents ?? zone.reserveCents)
+          // What it costs to take this placement off whoever is wearing it.
+          const takeLabel = `TAKE IT — ${formatMoney(state?.minimumBidCents ?? zone.reserveCents)}`
+          // SVG will not size a rect to its text, so the pill is measured from
+          // the string. 6.2px per character at 11px bold is close enough that
+          // the padding absorbs the error.
+          const takeWidth = takeLabel.length * 6.2 + 16
 
           return (
             <g
@@ -178,12 +184,31 @@ export function AssPicker({ states, selectedId, onSelect }: Props) {
                 fill="transparent"
               />
 
+              {/* A placement that has been paid for shows the logo it is
+                  wearing. `meet` keeps it inside its own zone; the clip keeps it
+                  inside the BODY. Text is deliberately unclipped so labels are
+                  never sliced at the silhouette's edge, but an image hanging off
+                  the side of the arse just looks broken — so this one element
+                  opts back into the clip. */}
+              {logo && (
+                <image
+                  href={logo}
+                  x={zone.rect.x + 12}
+                  y={zone.rect.y + 10}
+                  width={zone.rect.w - 24}
+                  height={zone.rect.h - 40}
+                  preserveAspectRatio="xMidYMid meet"
+                  clipPath={`url(#${clipId})`}
+                  className="pointer-events-none"
+                />
+              )}
+
               {/* Halo strokes keep the text legible over any fill underneath. */}
               <text
                 x={zone.anchor.x}
-                y={zone.anchor.y - 9}
+                y={logo ? zone.rect.y + zone.rect.h - 24 : zone.anchor.y - 9}
                 textAnchor="middle"
-                fontSize="14"
+                fontSize={logo ? 12 : 14}
                 fontWeight="700"
                 letterSpacing="0.5"
                 fill="#000"
@@ -192,39 +217,69 @@ export function AssPicker({ states, selectedId, onSelect }: Props) {
                 paintOrder="stroke"
                 className="pointer-events-none"
               >
-                {shortLabel(zone)}
+                {taken ? (state?.topBid?.sponsorName ?? shortLabel(zone)) : shortLabel(zone)}
               </text>
-              <text
-                x={zone.anchor.x}
-                y={zone.anchor.y + 16}
-                textAnchor="middle"
-                fontSize="23"
-                fontWeight="700"
-                letterSpacing="-0.5"
-                fill={state?.topBid ? tier : '#000'}
-                stroke="#fff"
-                strokeWidth="4.5"
-                paintOrder="stroke"
-                className="pointer-events-none"
-              >
-                {price}
-              </text>
-              {!state?.topBid && (
-                <text
-                  x={zone.anchor.x}
-                  y={zone.anchor.y + 31}
-                  textAnchor="middle"
-                  fontSize="11"
-                  fontWeight="600"
-                  letterSpacing="1"
-                  fill="#99948f"
-                  stroke="#fff"
-                  strokeWidth="3"
-                  paintOrder="stroke"
-                  className="pointer-events-none"
-                >
-                  NO BIDS YET
-                </text>
+
+              {/* The overlay the whole mechanic depends on: every placement,
+                  including the ones already wearing somebody's logo, states
+                  that it is still buyable and exactly what it costs to take. */}
+              {taken ? (
+                <>
+                  <rect
+                    x={zone.anchor.x - takeWidth / 2}
+                    y={zone.rect.y + zone.rect.h - 20}
+                    width={takeWidth}
+                    height={17}
+                    rx={8.5}
+                    fill={tier}
+                    className="pointer-events-none"
+                  />
+                  <text
+                    x={zone.anchor.x}
+                    y={zone.rect.y + zone.rect.h - 7.5}
+                    textAnchor="middle"
+                    fontSize="11"
+                    fontWeight="700"
+                    letterSpacing="0.4"
+                    fill="#fff"
+                    className="pointer-events-none"
+                  >
+                    {takeLabel}
+                  </text>
+                </>
+              ) : (
+                <>
+                  <text
+                    x={zone.anchor.x}
+                    y={zone.anchor.y + 16}
+                    textAnchor="middle"
+                    fontSize="23"
+                    fontWeight="700"
+                    letterSpacing="-0.5"
+                    fill="#000"
+                    stroke="#fff"
+                    strokeWidth="4.5"
+                    paintOrder="stroke"
+                    className="pointer-events-none"
+                  >
+                    {price}
+                  </text>
+                  <text
+                    x={zone.anchor.x}
+                    y={zone.anchor.y + 31}
+                    textAnchor="middle"
+                    fontSize="11"
+                    fontWeight="600"
+                    letterSpacing="1"
+                    fill="#99948f"
+                    stroke="#fff"
+                    strokeWidth="3"
+                    paintOrder="stroke"
+                    className="pointer-events-none"
+                  >
+                    UNCLAIMED
+                  </text>
+                </>
               )}
             </g>
           )
@@ -232,16 +287,17 @@ export function AssPicker({ states, selectedId, onSelect }: Props) {
       </svg>
 
       <p className="mt-2 text-center text-[13px] text-muted">
-        Tap a placement. Yes, all of them are real. Yes, I have thought about this.
+        Every placement is buyable, including the ones already wearing somebody's logo. Tap one.
       </p>
     </div>
   )
 }
 
 function ariaLabelFor(zone: Zone, state: ZoneAuctionState | undefined): string {
-  const price = state?.topBid
-    ? `current top bid ${formatMoney(state.topBid.amountCents)} by ${state.topBid.sponsorName}`
-    : `no bids yet, opening price ${formatMoney(state?.reserveCents ?? zone.reserveCents)}`
+  const status = state?.topBid
+    ? `currently worn by ${state.topBid.sponsorName} who paid ${formatMoney(state.topBid.amountCents)}, ` +
+      `take it for ${formatMoney(state.minimumBidCents)}`
+    : `unclaimed, ${formatMoney(state?.reserveCents ?? zone.reserveCents)}`
   const closed = state?.closed ? ', closed' : ''
-  return `${zone.name}, ${zone.size}, ${price}${closed}`
+  return `${zone.name}, ${zone.size}, ${status}${closed}`
 }

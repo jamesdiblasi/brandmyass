@@ -40,7 +40,7 @@ export function Waitlist() {
             </h2>
             <p className="mt-4 text-[17px] leading-relaxed text-white/60 sm:text-[19px]">
               I am building the platform so anybody can auction their own. Same live bidding, same anti-snipe
-              clock, same card holds, entirely different backside. Leave your email and I will tell you when it is
+              clock, same pay-to-wear model, entirely different backside. Leave your email and I will tell you when it is
               ready. No, I will not be applying the tattoos personally.
             </p>
 

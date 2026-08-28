@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { BidError, cancelBid, createBid } from '@/lib/auction'
-import { createDepositHold } from '@/lib/stripe'
+import { chargeBid } from '@/lib/stripe'
 import { query } from '@/lib/db'
 import { getZone } from '@/lib/zones'
 import { formatMoney } from '@/lib/money'
@@ -79,36 +79,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Could not record that bid.' }, { status: 500 })
   }
 
-  // The bid row exists but is worthless without a hold. If Stripe fails here we
-  // cancel it immediately rather than leaving a pending row that a redelivered
-  // webhook could later promote.
+  // The bid row exists but is worthless without a payment. If Stripe fails here
+  // we cancel it immediately rather than leaving a pending row that a
+  // redelivered webhook could later promote.
   try {
-    const hold = await createDepositHold({
+    const charge = await chargeBid({
       bidId: bid.id,
       zoneId: zone.id,
       zoneName: zone.name,
       amountCents: bid.amountCents,
-      depositCents: bid.depositCents,
       sponsorName: sponsorName.trim(),
       sponsorEmail: sponsorEmail.trim().toLowerCase(),
     })
 
     await query('update bids set stripe_payment_intent_id = $2, updated_at = now() where id = $1', [
       bid.id,
-      hold.paymentIntentId,
+      charge.paymentIntentId,
     ])
 
     return NextResponse.json({
       bidId: bid.id,
       zoneId: zone.id,
       amountCents: bid.amountCents,
-      depositCents: bid.depositCents,
-      depositFormatted: formatMoney(bid.depositCents),
-      clientSecret: hold.clientSecret,
+      amountFormatted: formatMoney(bid.amountCents),
+      clientSecret: charge.clientSecret,
     })
   } catch (err) {
-    console.error('[bids] stripe hold failed', err)
+    console.error('[bids] stripe charge failed', err)
     await cancelBid(bid.id).catch(() => {})
-    return NextResponse.json({ error: 'The card hold could not be set up. Nothing was charged.' }, { status: 502 })
+    return NextResponse.json({ error: 'The payment could not be set up. Nothing was charged.' }, { status: 502 })
   }
 }

@@ -15,12 +15,15 @@ export const CURRENCY_SYMBOL = '$'
 export const MIN_INCREMENT_CENTS = 1_000 // $10
 
 /**
- * Share of the bid taken as a card hold when bidding. It is authorised, not
- * captured — an outbid bidder's hold is released and they are never charged.
- * The winner's hold is captured and the balance invoiced separately.
+ * There is no deposit and no hold. A bid is CHARGED IN FULL the moment it is
+ * placed, and it is not refunded when a later bidder takes the placement — the
+ * money buys the time the logo actually spends on the arse, not a claim on the
+ * final outcome.
+ *
+ * The single exception is a bid whose payment lands after somebody has already
+ * gone higher. That logo never went on at all, so it is refunded in full. See
+ * `activateBid` and the webhook.
  */
-export const DEPOSIT_PERCENT = 20
-export const MIN_DEPOSIT_CENTS = 1_000 // $10, Stripe dislikes trivial holds
 
 /**
  * Anti-snipe. A bid landing inside the window pushes the close out, so the
@@ -32,13 +35,6 @@ export const ANTI_SNIPE_EXTENSION_MS = 5 * 60 * 1000
 
 /** How often the front end re-reads auction state. */
 export const POLL_INTERVAL_MS = 8_000
-
-/**
- * A card hold cannot be left open forever — Stripe expires uncaptured
- * PaymentIntents after 7 days. Auctions longer than this need the settle job
- * to re-authorise, which is why the default campaign is deliberately short.
- */
-export const MAX_HOLD_DAYS = 7
 
 export const SITE = {
   name: 'Brand My Ass',

@@ -70,9 +70,9 @@ export default async function Home() {
             </h1>
 
             <p className="lead mt-6 max-w-2xl">
-              Nine advertising placements on one backside, sold to the highest bidder and applied as a temporary
-              tattoo for six weeks. It is the most honest media buy in the country, because everybody can see
-              exactly where your money went.
+              Nine advertising placements on one backside, sold to the highest bidder and applied as a
+              temporary tattoo for two weeks. If you’re outbid, your tattoo is removed, and replaced with my new
+              owner.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">

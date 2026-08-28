@@ -26,13 +26,15 @@ type Phase = 'form' | 'card' | 'done'
 export function BidPanel({ zone, state, onBidPlaced }: Props) {
   const [phase, setPhase] = useState<Phase>('form')
   const [clientSecret, setClientSecret] = useState<string | null>(null)
-  const [depositCents, setDepositCents] = useState(0)
+  const [chargedCents, setChargedCents] = useState(0)
 
   const minimum = state?.minimumBidCents ?? zone.reserveCents
   const [amount, setAmount] = useState(() => String(minimum / 100))
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [url, setUrl] = useState('')
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [logoBusy, setLogoBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -43,8 +45,29 @@ export function BidPanel({ zone, state, onBidPlaced }: Props) {
     setClientSecret(null)
     setError(null)
     setAmount(String((state?.minimumBidCents ?? zone.reserveCents) / 100))
+    setLogoUrl(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zone.id])
+
+  async function uploadLogo(file: File) {
+    setLogoBusy(true)
+    setError(null)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const res = await fetch('/api/logo', { method: 'POST', body })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'That image would not upload.')
+        return
+      }
+      setLogoUrl(data.url)
+    } catch {
+      setError('Could not upload that image.')
+    } finally {
+      setLogoBusy(false)
+    }
+  }
 
   const tier = TIER_COLOR[zone.tier]
   const closed = state?.closed ?? false
@@ -69,6 +92,7 @@ export function BidPanel({ zone, state, onBidPlaced }: Props) {
           sponsorName: name,
           sponsorEmail: email,
           sponsorUrl: url || null,
+          logoUrl,
         }),
       })
       const data = await res.json()
@@ -77,7 +101,7 @@ export function BidPanel({ zone, state, onBidPlaced }: Props) {
         return
       }
       setClientSecret(data.clientSecret)
-      setDepositCents(data.depositCents)
+      setChargedCents(data.amountCents)
       setPhase('card')
     } catch {
       setError('Could not reach the server. Check your connection.')
@@ -121,8 +145,8 @@ export function BidPanel({ zone, state, onBidPlaced }: Props) {
 
       {state?.topBid && (
         <p className="mt-3 text-[13px] text-muted">
-          Currently held by <span className="font-semibold text-ink">{state.topBid.sponsorName}</span>. Take it
-          off them. They will get an email about it.
+          Currently worn by <span className="font-semibold text-ink">{state.topBid.sponsorName}</span>. Pay more
+          and it comes off them and goes on you.
         </p>
       )}
 
@@ -164,6 +188,41 @@ export function BidPanel({ zone, state, onBidPlaced }: Props) {
             </Field>
           </div>
 
+          <Field label="Your logo — this is what goes on me">
+            <div className="flex items-center gap-3">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-btn border border-hairline bg-white">
+                {logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="Your logo" className="h-full w-full object-contain" />
+                ) : (
+                  <span aria-hidden className="text-[22px] text-muted">
+                    🍑
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) void uploadLogo(f)
+                  }}
+                  className="block w-full text-[13px] text-muted file:mr-3 file:cursor-pointer file:rounded-btn
+                             file:border file:border-hairline file:bg-white file:px-3 file:py-1.5
+                             file:text-[13px] file:font-medium file:text-ink hover:file:bg-canvas"
+                />
+                <p className="mt-1 text-[12px] text-muted">
+                  {logoBusy
+                    ? 'Uploading…'
+                    : logoUrl
+                      ? 'Uploaded. Everyone can see it the moment you pay.'
+                      : 'PNG, JPEG, WebP or GIF. Up to 2 MB. No SVG.'}
+                </p>
+              </div>
+            </div>
+          </Field>
+
           <Field label="Link for the sponsor wall (optional)">
             <input
               value={url}
@@ -178,13 +237,13 @@ export function BidPanel({ zone, state, onBidPlaced }: Props) {
             <p className="rounded-btn bg-hotpink/10 px-3 py-2 text-[14px] font-medium text-hotpink">{error}</p>
           )}
 
-          <button type="submit" disabled={busy} className="btn-filled btn-lg w-full">
+          <button type="submit" disabled={busy || logoBusy} className="btn-filled btn-lg w-full">
             {busy ? 'Hold on…' : `Bid ${amount ? `$${amount}` : ''} on ${zone.name}`}
           </button>
 
           <p className="text-center text-[12.5px] leading-snug text-muted">
-            We place a 20% hold on your card — not a charge. Get outbid and it vanishes like it never happened.
-            Win and we take the hold, then invoice the rest.
+            You pay the full amount now and your logo goes on straight away. It comes off if somebody outbids you,
+            and the payment is not refunded — it bought the time your logo was up there.
           </p>
         </form>
       )}
@@ -192,8 +251,8 @@ export function BidPanel({ zone, state, onBidPlaced }: Props) {
       {phase === 'card' && clientSecret && stripePromise && (
         <div className="mt-6">
           <div className="mb-4 rounded-btn bg-canvas p-3 text-[14px]">
-            Hold of <span className="font-semibold">{formatMoney(depositCents)}</span> on your card. Not a charge.
-            Not yet.
+            Paying <span className="font-semibold">{formatMoney(chargedCents)}</span> now. This is a charge, not a
+            hold, and it is not refunded if you are later outbid.
           </div>
           <Elements
             stripe={stripePromise}
@@ -224,16 +283,16 @@ export function BidPanel({ zone, state, onBidPlaced }: Props) {
       {phase === 'card' && !stripePromise && (
         <p className="mt-6 rounded-btn bg-gold/20 p-3 text-[14px]">
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set, so the card step cannot render. The bid was recorded as
-          pending.
+          pending and nothing was charged.
         </p>
       )}
 
       {phase === 'done' && (
         <div className="mt-6 rounded-btn border border-lime bg-lime/15 p-4">
-          <p className="text-[15px] font-semibold">Hold placed. You are in.</p>
+          <p className="text-[15px] font-semibold">Paid. You are on.</p>
           <p className="mt-1 text-[14px] text-muted">
-            The board updates the moment your bank confirms — usually seconds. If someone outbids you, your hold
-            is released automatically and you will get an email that is, frankly, quite smug about it.
+            The board updates the moment your bank confirms — usually seconds — and your logo goes on next time I
+            am near the printer. It stays there until somebody pays more than you did.
           </p>
         </div>
       )}
@@ -271,7 +330,7 @@ function CardStep({ onDone }: { onDone: () => void }) {
       <PaymentElement />
       {error && <p className="rounded-btn bg-hotpink/10 px-3 py-2 text-[14px] font-medium text-hotpink">{error}</p>}
       <button type="submit" disabled={!stripe || busy} className="btn-filled btn-lg w-full">
-        {busy ? 'Talking to your bank…' : 'Authorise the hold'}
+        {busy ? 'Talking to your bank…' : 'Pay and get on the arse'}
       </button>
     </form>
   )

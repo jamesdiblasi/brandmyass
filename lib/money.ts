@@ -1,4 +1,4 @@
-import { CURRENCY_SYMBOL, DEPOSIT_PERCENT, MIN_DEPOSIT_CENTS } from './config'
+import { CURRENCY_SYMBOL } from './config'
 
 /**
  * Cents in, human-readable string out. The whole app stores integers; this is
@@ -11,17 +11,6 @@ export function formatMoney(cents: number, opts: { cents?: boolean } = {}): stri
     maximumFractionDigits: showCents ? 2 : 0,
   })
   return `${CURRENCY_SYMBOL}${value}`
-}
-
-/**
- * The card hold taken when a bid is placed. Rounded UP to the dollar so we
- * never authorise a fraction of a cent, and floored at the Stripe-friendly
- * minimum.
- */
-export function depositFor(bidCents: number): number {
-  const raw = Math.ceil((bidCents * DEPOSIT_PERCENT) / 100)
-  const rounded = Math.ceil(raw / 100) * 100
-  return Math.max(rounded, MIN_DEPOSIT_CENTS)
 }
 
 /**

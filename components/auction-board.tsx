@@ -195,7 +195,7 @@ export function AuctionBoard({ initial }: { initial: BoardData }) {
                 <span className="text-muted">on</span>
                 <span className="font-medium">{getZone(bid.zoneId)?.name ?? bid.zoneId}</span>
                 {bid.status === 'outbid' && (
-                  <span className="pill bg-canvas text-muted">outbid, hold released</span>
+                  <span className="pill bg-canvas text-muted">outbid, tattoo removed</span>
                 )}
                 {bid.status === 'won' && <span className="pill bg-gold text-ink">WON</span>}
               </li>

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { activateBid, cancelBid } from '@/lib/auction'
-import { releaseHold, verifyWebhook } from '@/lib/stripe'
+import { refundPayment, verifyWebhook } from '@/lib/stripe'
 import { query, queryOne } from '@/lib/db'
 
 // The signature is computed over the exact bytes Stripe sent. Any parsing or
@@ -12,9 +12,8 @@ export const runtime = 'nodejs'
 /**
  * The only place a bid is allowed to become the standing bid.
  *
- * A bid is a promise until the card says otherwise. `payment_intent.
- * amount_capturable_updated` is Stripe's way of saying "the funds are held and
- * capturable" for a manual-capture intent, and that — not the browser
+ * A bid is a promise until the card says otherwise. `payment_intent.succeeded`
+ * is Stripe confirming the money actually moved, and that — not the browser
  * reporting success — is what promotes a bid. Trusting the client here would
  * let anyone take a placement off the market for free.
  */
@@ -45,31 +44,32 @@ export async function POST(req: Request) {
 
   try {
     switch (event.type) {
-      case 'payment_intent.amount_capturable_updated': {
+      case 'payment_intent.succeeded': {
         const intent = event.data.object as Stripe.PaymentIntent
         const bidId = Number(intent.metadata?.bid_id)
         if (!Number.isSafeInteger(bidId)) break
 
+        await query('update bids set paid_at = coalesce(paid_at, now()) where id = $1', [bidId])
+
         const result = await activateBid(bidId)
 
         if (result.outcome === 'activated') {
-          // Whoever we just displaced gets their money unfrozen. This is the
-          // single most important line on the site from a bidder's point of
-          // view, so a failure here is logged loudly rather than swallowed.
-          if (result.releasePaymentIntentId) {
-            await releaseHold(result.releasePaymentIntentId).catch((err) =>
-              console.error('[webhook] FAILED to release outbid hold', result.releasePaymentIntentId, err),
-            )
+          // The displaced bid is NOT refunded. It paid for the time its logo
+          // spent on the arse and it got that time.
+          if (result.displacedBidId) {
+            console.log(`[webhook] bid ${bidId} displaced bid ${result.displacedBidId} — no refund, as designed`)
           }
           if (result.extended) {
             console.log(`[webhook] anti-snipe: bid ${bidId} pushed close to ${result.newClosesAt}`)
           }
         } else if (result.outcome === 'too_late') {
-          // Authorised, but somebody went higher while the card was clearing.
-          // Give it straight back.
-          await releaseHold(intent.id).catch((err) =>
-            console.error('[webhook] FAILED to release late hold', intent.id, err),
-          )
+          // Paid, but somebody went higher while the card was clearing, so this
+          // logo never went on at all. Nothing was sold — give the money back.
+          // A failure here means somebody is out of pocket for nothing, so it
+          // is logged loudly rather than swallowed.
+          await refundPayment(intent.id)
+            .then(() => query('update bids set refunded_at = now() where id = $1', [bidId]))
+            .catch((err) => console.error('[webhook] FAILED to refund a never-displayed bid', intent.id, err))
         }
         break
       }
@@ -84,14 +84,7 @@ export async function POST(req: Request) {
       case 'payment_intent.canceled': {
         const intent = event.data.object as Stripe.PaymentIntent
         const bidId = Number(intent.metadata?.bid_id)
-        if (Number.isSafeInteger(bidId)) {
-          await cancelBid(bidId)
-          await query(
-            `update bids set hold_released_at = coalesce(hold_released_at, now()), updated_at = now()
-             where stripe_payment_intent_id = $1`,
-            [intent.id],
-          )
-        }
+        if (Number.isSafeInteger(bidId)) await cancelBid(bidId)
         break
       }
 
