@@ -34,6 +34,44 @@ and it disappears.
   when the browser says so. Otherwise anyone could take a placement off the
   market for free by typing a large number.
 
+## Live
+
+https://brandmyass-app.azurewebsites.net
+
+Deployed by `.github/workflows/deploy-brandmyass.yml` on every push to the
+feature branch that touches `brandmyass/`. It runs in the `leadgen` resource
+group (Australia Southeast), on the same App Service Plan as the dashboard —
+an extra app on a plan already paid for costs nothing.
+
+It is currently serving the **offline board**: full copy, working placement
+map, all ten reserve prices, but no bidding, because `DATABASE_URL` is not set
+on the App Service. That is the designed fallback, not a broken deploy.
+
+### Making it take real money
+
+Add these as repository secrets, then push (or re-run the workflow):
+
+| Secret | Used for |
+| --- | --- |
+| `BMA_DATABASE_URL` | app role against the brandmyass database |
+| `BMA_STRIPE_SECRET_KEY` | server-side Stripe |
+| `BMA_STRIPE_PUBLISHABLE_KEY` | **build-time** — inlined into the client bundle |
+| `BMA_STRIPE_WEBHOOK_SECRET` | webhook signature verification |
+
+Then, separately:
+
+1. `npm run db:setup` from this directory, with admin credentials, to create
+   the database on `optello-pg`.
+2. Add a firewall rule on the Postgres server admitting the App Service's
+   outbound addresses — the dashboard's `deploy.yml` documents hitting exactly
+   this problem with GitHub runners.
+3. Point a Stripe webhook endpoint at
+   `https://brandmyass-app.azurewebsites.net/api/stripe/webhook` for
+   `payment_intent.amount_capturable_updated`, `payment_intent.payment_failed`
+   and `payment_intent.canceled`. **Until this exists no bid can ever become
+   the standing bid** — by design.
+4. Schedule `npm run auction:settle` at least daily.
+
 ## Setup
 
 ```bash
