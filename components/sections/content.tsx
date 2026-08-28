@@ -121,7 +121,7 @@ const FAQ = [
   ],
   [
     'What happens if I get outbid?',
-    'Your tattoo comes off and theirs goes on, and you keep your place in the record on this website for the year it stays up. You are not refunded, and I want to be completely unambiguous about that: the payment bought the time your logo spent on me, and it spent it. The only exception is if your payment lands after someone has already gone higher, in which case your logo never went on at all — those I sort out by hand, so email me and you will get every cent back.',
+    'Your tattoo comes off and theirs goes on, and you keep your place in the record on this website for the year it stays up. You are not refunded, and I want to be completely unambiguous about that: the payment bought the time your logo spent on me, and it spent it.',
   ],
   [
     'Can I buy all nine placements?',
