@@ -1,8 +1,8 @@
 /**
  * The manual refund queue.
  *
- *   npm run auction:refunds                 list what is owed
- *   npm run auction:refunds -- --pay 42     refund bid 42 and mark it done
+ *   npm run auction:refunds                  list what is owed
+ *   npm run auction:refunds -- --mark 42     record that bid 42 was refunded
  *
  * Refunds are not automatic: the webhook flags a payment that cleared after
  * somebody had already gone higher — a logo that never went on at all — and
@@ -10,8 +10,12 @@
  * visible, which makes it the difference between "I'll refund manually" and
  * nobody ever finding out one was owed.
  *
- * Listing is the default and touches nothing. Paying takes an explicit bid id,
- * one at a time, so a stray run cannot empty the queue by accident.
+ * The money itself moves in the Stripe Dashboard: open the PaymentIntent this
+ * lists and press Refund. Doing it there rather than here is deliberate — it
+ * means NO credential with refund permission exists in this codebase or on the
+ * server, only in a browser session with your own Stripe login. This script
+ * just keeps the books: `--mark` stamps refunded_at so the row leaves the
+ * queue and cannot be paid twice.
  */
 import { config } from 'dotenv'
 
@@ -33,10 +37,10 @@ async function main(): Promise<void> {
   const { formatMoney } = await import('../lib/money')
   const { getZone } = await import('../lib/zones')
 
-  const payFlag = process.argv.indexOf('--pay')
-  const payId = payFlag === -1 ? null : Number(process.argv[payFlag + 1])
-  if (payFlag !== -1 && !Number.isSafeInteger(payId)) {
-    console.error('--pay needs a bid id, e.g. `npm run auction:refunds -- --pay 42`')
+  const markFlag = process.argv.indexOf('--mark')
+  const markId = markFlag === -1 ? null : Number(process.argv[markFlag + 1])
+  if (markFlag !== -1 && !Number.isSafeInteger(markId)) {
+    console.error('--mark needs a bid id, e.g. `npm run auction:refunds -- --mark 42`')
     process.exit(1)
   }
 
@@ -48,7 +52,7 @@ async function main(): Promise<void> {
     order by refund_due_at
   `)
 
-  if (payId == null) {
+  if (markId == null) {
     if (rows.length === 0) {
       console.log('· nothing owed')
     } else {
@@ -58,29 +62,27 @@ async function main(): Promise<void> {
         console.log(`    ${r.sponsor_name} <${r.sponsor_email}>`)
         console.log(`    ${r.stripe_payment_intent_id ?? 'NO PAYMENT INTENT — check Stripe by hand'}`)
         console.log(`    flagged ${r.refund_due_at.toISOString()}`)
-        console.log(`    refund:  npm run auction:refunds -- --pay ${r.id}\n`)
+        console.log('    refund it in the Stripe Dashboard (open the intent above, press Refund), then:')
+        console.log(`      npm run auction:refunds -- --mark ${r.id}\n`)
       }
     }
     await closePool()
     return
   }
 
-  const row = rows.find((r) => r.id === payId)
+  const row = rows.find((r) => r.id === markId)
   if (!row) {
-    console.error(`bid ${payId} is not owed a refund. Nothing done.`)
-    process.exit(1)
-  }
-  if (!row.stripe_payment_intent_id) {
-    console.error(`bid ${payId} has no PaymentIntent on file. Refund it in the Stripe dashboard by hand.`)
+    console.error(`bid ${markId} is not in the refund queue. Nothing done.`)
     process.exit(1)
   }
 
-  const { refundPayment } = await import('../lib/stripe')
-  await refundPayment(row.stripe_payment_intent_id)
-  // Stamped only after Stripe confirms, so a failure here leaves the row in the
-  // queue to be tried again rather than silently marked done.
-  await query('update bids set refunded_at = now(), updated_at = now() where id = $1', [payId])
-  console.log(`✓ refunded ${formatMoney(row.amount_cents)} to ${row.sponsor_email} (bid ${payId})`)
+  // Recording only — the refund itself happened (or should have) in the Stripe
+  // Dashboard. Marking first and refunding never is the failure this cannot
+  // protect against, which is why the prompt above tells you the order.
+  await query('update bids set refunded_at = now(), updated_at = now() where id = $1', [markId])
+  console.log(
+    `✓ recorded: bid ${markId} (${formatMoney(row.amount_cents)}, ${row.sponsor_email}) marked refunded`,
+  )
 
   await closePool()
 }

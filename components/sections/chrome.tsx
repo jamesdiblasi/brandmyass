@@ -37,6 +37,19 @@ export function SiteFooter() {
           </a>
           <p className="mt-2">Payments by Stripe. Tattoos by hand. Regrets by the dozen.</p>
           <p className="mt-1">© {new Date().getFullYear()} — all cheeks reserved.</p>
+          <div className="mt-3 flex sm:justify-end">
+            <a
+              href="https://x.com/thatjsd"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Brand My Ass on X"
+              className="text-muted transition-colors hover:text-ink"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden>
+                <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z" />
+              </svg>
+            </a>
+          </div>
         </div>
       </div>
     </footer>

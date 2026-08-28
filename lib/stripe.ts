@@ -9,10 +9,11 @@ import { CURRENCY } from './config'
  * somebody pays more. The money buys display time, not a claim on the outcome,
  * so being outbid is not refunded.
  *
- * There is exactly one refund path, and it is not a courtesy. If a payment
- * confirms AFTER someone else has already gone higher, that logo never went on
- * the ass at all — nothing was sold, so the money goes back. Every other
- * outcome keeps the payment.
+ * Nothing here can refund. A payment that confirms after someone else has
+ * already gone higher is FLAGGED for a human (see lib/webhook.ts); the money
+ * itself is returned by hand in the Stripe Dashboard. Keeping refund
+ * capability out of the codebase entirely is deliberate — the server's key
+ * only needs to create PaymentIntents.
  */
 
 // Pinned deliberately: without one, an account-level version bump silently
@@ -90,28 +91,6 @@ export async function chargeBid(
 
   if (!intent.client_secret) throw new Error('Stripe returned a PaymentIntent with no client secret')
   return { paymentIntentId: intent.id, clientSecret: intent.client_secret }
-}
-
-/**
- * Refunds a payment in full.
- *
- * Used for exactly one case: a payment that confirmed after somebody had
- * already bid higher, so the logo never went on. Not used for ordinary
- * outbidding, which is not refundable.
- *
- * Refunding an already-refunded charge throws, and Stripe redelivers webhooks,
- * so that specific error is swallowed — money already returned staying returned
- * is the outcome we wanted.
- */
-export async function refundPayment(paymentIntentId: string): Promise<void> {
-  const stripe = getStripe()
-  try {
-    await stripe.refunds.create({ payment_intent: paymentIntentId })
-  } catch (err) {
-    const e = err as Stripe.errors.StripeError
-    if (e?.code === 'charge_already_refunded') return
-    throw err
-  }
 }
 
 export function verifyWebhook(rawBody: string, signature: string): Stripe.Event {

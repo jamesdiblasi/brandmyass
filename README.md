@@ -36,19 +36,41 @@ there would be stored XSS on the storage domain. The stored content type is the
 one we sniffed, never the one we were handed, and the blob name is a UUID so an
 uploader cannot pick its own path or overwrite somebody else's logo.
 
-## Stripe keys
+## Stripe — three steps, once
 
-Two, with different lifetimes and different blast radii.
+Stripe setup is manual and one-off, against a **dedicated Stripe account for
+this site** (free). A separate account is what makes everything else simple:
+its own keys, its own webhook, receipts and card statements that say Brand My
+Ass rather than another business, and payouts that never mix with anything.
 
-| Key | Lives | Permissions | Why |
-| --- | --- | --- | --- |
-| `BMA_STRIPE_APP_KEY` | App Service | **PaymentIntents** write | The only thing the running site cannot do without. Creating a charge is per-bid and server-side; no publishable key can do it, because one that could would let anyone charge the account. |
-| `BMA_STRIPE_SECRET_KEY` | GitHub secret only | **Webhook Endpoints** + **Refunds** write | Setup and operations. Registering the endpoint is one-off; refunds are issued from a laptop via `auction:refunds`. Neither belongs on a public web server. |
-| publishable `pk_…` | compiled into the browser bundle | none — it is public | Drives the card form. It can confirm a payment that already exists and nothing else. |
+1. **Create the account and a restricted key.** stripe.com → new account →
+   Developers → API keys → *Create restricted key* with **PaymentIntents:
+   Write** and nothing else. Note the publishable key (`pk_…`) while there.
+   Creating the charge is the one thing the server cannot do without; the
+   restricted key means a compromised server can create payments and do
+   nothing else — not read customers, not refund, not touch webhooks.
 
-If only `BMA_STRIPE_SECRET_KEY` is set, the site runs on it and the workflow
-warns. That works; it just means the public site holds a credential that can
-refund and rewire webhooks, which it never needs.
+2. **Register the webhook by hand.** Developers → Webhooks → *Add endpoint*:
+   `https://brandmyass-app.azurewebsites.net/api/stripe/webhook`, events
+   `payment_intent.succeeded`, `payment_intent.payment_failed`,
+   `payment_intent.canceled`. Copy the signing secret (`whsec_…`). Without
+   this endpoint no bid can ever become the standing bid — the webhook is the
+   only place a bid is promoted.
+
+3. **Hand the three values to the repo** (Settings → Secrets and variables →
+   Actions) and re-run the deploy workflow:
+
+   | Value | Where | Why there |
+   | --- | --- | --- |
+   | `BMA_STRIPE_SECRET_KEY` (the `rk_…`) | secret | applied to the App Service at deploy |
+   | `BMA_STRIPE_WEBHOOK_SECRET` (`whsec_…`) | secret | same |
+   | `BMA_STRIPE_PUBLISHABLE_KEY` (`pk_…`) | **variable** | compiled into the browser bundle at build time — it is public by design, and as a runtime setting it silently does nothing |
+
+Refunds have no key at all: the webhook flags a payment that cleared after
+somebody had already gone higher (`npm run auction:refunds` lists them), the
+money is returned by hand in the Stripe Dashboard, and
+`npm run auction:refunds -- --mark <id>` records it. No credential with
+refund permission exists in this codebase or on the server.
 
 ## The auction rules
 
@@ -65,11 +87,12 @@ refund and rewire webhooks, which it never needs.
   is the whole reason a manual refund is possible rather than merely intended:
 
   ```bash
-  npm run auction:refunds              # what is owed
-  npm run auction:refunds -- --pay 42  # refund bid 42, one at a time
+  npm run auction:refunds                # what is owed
+  npm run auction:refunds -- --mark 42   # record a refund made in the Dashboard
   ```
 
-  Listing is the default and touches nothing.
+  The money itself moves in the Stripe Dashboard; the script only keeps the
+  books, so no refund-capable credential exists anywhere in this app.
 - **Anti-snipe:** any bid inside the final 5 minutes pushes that zone's close to
   5 minutes from now. Extensions reset the clock rather than stacking, so the
   auction cannot be compounded into next year.
@@ -107,15 +130,6 @@ write them straight into the App Service:
    boundary between the two apps — the database role is. A public site taking
    card details must not hold a credential that can read `optello`.
 
-2. **Configure Brand My Ass Stripe** (`setup-brandmyass-stripe.yml`) — finds a
-   Stripe secret key, registers the webhook endpoint at
-   `https://brandmyass-app.azurewebsites.net/api/stripe/webhook` for
-   `payment_intent.succeeded`, `payment_intent.payment_failed` and
-   `payment_intent.canceled`, and writes `STRIPE_SECRET_KEY` and
-   `STRIPE_WEBHOOK_SECRET` to the App Service. **Until that endpoint exists no
-   bid can ever become the standing bid** — by design. It finishes by signing a
-   payload with the secret it just installed and posting it at the live site, so
-   a green run means the wiring genuinely works.
 
 Two things it cannot do for you:
 
