@@ -36,6 +36,20 @@ there would be stored XSS on the storage domain. The stored content type is the
 one we sniffed, never the one we were handed, and the blob name is a UUID so an
 uploader cannot pick its own path or overwrite somebody else's logo.
 
+## Stripe keys
+
+Two, with different lifetimes and different blast radii.
+
+| Key | Lives | Permissions | Why |
+| --- | --- | --- | --- |
+| `BMA_STRIPE_APP_KEY` | App Service | **PaymentIntents** write | The only thing the running site cannot do without. Creating a charge is per-bid and server-side; no publishable key can do it, because one that could would let anyone charge the account. |
+| `BMA_STRIPE_SECRET_KEY` | GitHub secret only | **Webhook Endpoints** + **Refunds** write | Setup and operations. Registering the endpoint is one-off; refunds are issued from a laptop via `auction:refunds`. Neither belongs on a public web server. |
+| publishable `pk_…` | compiled into the browser bundle | none — it is public | Drives the card form. It can confirm a payment that already exists and nothing else. |
+
+If only `BMA_STRIPE_SECRET_KEY` is set, the site runs on it and the workflow
+warns. That works; it just means the public site holds a credential that can
+refund and rewire webhooks, which it never needs.
+
 ## The auction rules
 
 - Every zone has its **own clock**. A bidding war over a prime cheek does not
