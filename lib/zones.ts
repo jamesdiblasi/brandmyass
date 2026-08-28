@@ -71,11 +71,11 @@ export const FOLD_PATHS = [
 
 export const ZONES: Zone[] = [
   {
-    id: 'upper-shelf',
-    name: 'The Upper Shelf',
-    pitch: 'Tramp-stamp country. Prime real estate and everybody knows it.',
+    id: 'tramp-stamp',
+    name: 'The Tramp Stamp',
+    pitch: 'The most historically regrettable postcode on the human body.',
     blurb:
-      'The widest single placement on the arse. Sits exactly where a waistband gives up, which means it is the first thing visible every single time I bend over to plug in a monitor. Forty centimetres of uninterrupted lower back. If your brand has ever wanted to be described as "load-bearing", this is your moment.',
+      'The widest single placement on the arse, and the only one that arrives with a cultural legacy attached. Sits exactly where a waistband gives up, which makes it the first thing visible every single time I bend over to plug in a monitor. Forty centimetres of uninterrupted lower back that has been sitting there since 2004 waiting for something to happen to it. Congratulations — you are what happens to it.',
     tier: 'prime',
     size: '40 × 14 cm',
     reserveCents: 30_000,
