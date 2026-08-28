@@ -38,9 +38,9 @@ export const POLL_INTERVAL_MS = 8_000
 
 export const SITE = {
   name: 'Brand My Ass',
-  domain: 'brandmyass.com',
+  domain: 'brandmyass.site',
   tagline: 'Premium out-of-home advertising. On my ass.',
   /** Where Stripe sends people back to. Set PUBLIC_BASE_URL in production. */
   baseUrl: process.env.PUBLIC_BASE_URL || 'http://localhost:3002',
-  contactEmail: 'sponsors@brandmyass.com',
+  contactEmail: 'pimp@brandmyass.site',
 }

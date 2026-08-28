@@ -19,11 +19,13 @@ interface Props {
   zone: Zone
   state: ZoneAuctionState | undefined
   onBidPlaced: () => void
+  /** Shows the uploaded logo on the body before any money changes hands. */
+  onLogoPreview: (logoUrl: string | null) => void
 }
 
 type Phase = 'form' | 'card' | 'done'
 
-export function BidPanel({ zone, state, onBidPlaced }: Props) {
+export function BidPanel({ zone, state, onBidPlaced, onLogoPreview }: Props) {
   const [phase, setPhase] = useState<Phase>('form')
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [chargedCents, setChargedCents] = useState(0)
@@ -46,6 +48,9 @@ export function BidPanel({ zone, state, onBidPlaced }: Props) {
     setError(null)
     setAmount(String((state?.minimumBidCents ?? zone.reserveCents) / 100))
     setLogoUrl(null)
+    // A preview belongs to the cheek it was uploaded against. Carrying it to
+    // the next zone would show somebody a placement they are not looking at.
+    onLogoPreview(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zone.id])
 
@@ -62,6 +67,7 @@ export function BidPanel({ zone, state, onBidPlaced }: Props) {
         return
       }
       setLogoUrl(data.url)
+      onLogoPreview(data.url)
     } catch {
       setError('Could not upload that image.')
     } finally {
@@ -313,15 +319,34 @@ function CardStep({ onDone }: { onDone: () => void }) {
     setError(null)
 
     // `redirect: 'if_required'` keeps card payments inline while still allowing
-    // methods that genuinely need a redirect to take one.
-    const { error: err } = await stripe.confirmPayment({ elements, redirect: 'if_required' })
+    // methods that genuinely need a redirect to take one. A return_url is
+    // mandatory for those: without it Stripe refuses the confirmation outright
+    // the moment somebody picks a redirect-based method, which reads to the
+    // bidder as the site being broken. It is built from the live origin rather
+    // than PUBLIC_BASE_URL because that variable is not NEXT_PUBLIC_ and so is
+    // undefined in the browser — reading it here would send everyone to
+    // localhost.
+    const { error: err, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      redirect: 'if_required',
+      confirmParams: { return_url: `${window.location.origin}/?paid=1` },
+    })
 
     if (err) {
       setError(err.message ?? 'Your bank said no.')
       setBusy(false)
       return
     }
+
+    // No error is not the same as paid. `processing` and `requires_action` both
+    // land here, and telling someone their logo is on when the money has not
+    // moved is exactly the lie the webhook exists to prevent. The board is fed
+    // by the webhook either way, so the honest message costs nothing.
     setBusy(false)
+    if (paymentIntent && paymentIntent.status !== 'succeeded') {
+      setError('Your bank is still thinking about it. The board updates by itself the moment it clears.')
+      return
+    }
     onDone()
   }
 

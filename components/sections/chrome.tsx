@@ -12,7 +12,6 @@ export function SiteHeader() {
         <nav className="hidden items-center gap-6 text-[15px] font-medium text-muted md:flex">
           <a href="#how" className="transition-colors hover:text-ink">How it works</a>
           <a href="#numbers" className="transition-colors hover:text-ink">The numbers</a>
-          <a href="#rules" className="transition-colors hover:text-ink">House rules</a>
           <a href="#faq" className="transition-colors hover:text-ink">FAQ</a>
         </nav>
         <a href="#auction" className="btn-filled">Bid on a cheek</a>

@@ -27,6 +27,9 @@ export function AuctionBoard({ initial }: { initial: BoardData }) {
   // different cheek the moment a zone earlier in the list was removed.
   const [selectedId, setSelectedId] = useState<string>(getZone('left-prime')?.id ?? ZONES[0].id)
   const [stale, setStale] = useState(false)
+  // A logo the visitor has uploaded but not yet paid for. Local to this browser
+  // — nobody else can see it, because nobody else has bought anything.
+  const [preview, setPreview] = useState<{ zoneId: string; logoUrl: string } | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -56,6 +59,14 @@ export function AuctionBoard({ initial }: { initial: BoardData }) {
     () => new Map<string, ZoneAuctionState>(data.zones.map((z) => [z.zoneId, z])),
     [data.zones],
   )
+
+  // Once the server is serving the same logo, the placement is real and the
+  // preview has nothing left to say. Dropping it here rather than on payment
+  // means the badge stops saying NOT PAID at the moment it stops being true.
+  useEffect(() => {
+    if (!preview) return
+    if (states.get(preview.zoneId)?.topBid?.logoUrl === preview.logoUrl) setPreview(null)
+  }, [states, preview])
 
   const selectedZone = getZone(selectedId) ?? ZONES[0]
   const sold = data.zones.filter((z) => z.topBid).length
@@ -100,11 +111,16 @@ export function AuctionBoard({ initial }: { initial: BoardData }) {
       {/* --- picker + panel ------------------------------------------------ */}
       <div className="grid gap-8 lg:grid-cols-[1.05fr_1fr] lg:items-start">
         <div className="card-dj p-4 sm:p-6">
-          <AssPicker states={states} selectedId={selectedId} onSelect={setSelectedId} />
+          <AssPicker states={states} selectedId={selectedId} onSelect={setSelectedId} preview={preview} />
         </div>
 
         <div className="lg:sticky lg:top-6">
-          <BidPanel zone={selectedZone} state={states.get(selectedId)} onBidPlaced={refresh} />
+          <BidPanel
+            zone={selectedZone}
+            state={states.get(selectedId)}
+            onBidPlaced={refresh}
+            onLogoPreview={(logoUrl) => setPreview(logoUrl ? { zoneId: selectedId, logoUrl } : null)}
+          />
         </div>
       </div>
 

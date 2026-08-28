@@ -1,6 +1,5 @@
 import { ZONES } from '@/lib/zones'
 import { formatMoney } from '@/lib/money'
-import { MIN_INCREMENT_CENTS } from '@/lib/config'
 
 /* ========================================================================== */
 /*  How it works                                                              */
@@ -100,63 +99,6 @@ export function Numbers() {
               </div>
             ))}
           </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/* ========================================================================== */
-/*  House rules                                                               */
-/* ========================================================================== */
-
-const WONT = [
-  ['Anything hateful', 'Obvious. Instant rejection, refunded in full, no discussion.'],
-  ['Crypto', 'I have been burned before and so, spiritually, has my ass.'],
-  ['Your ex’s name', 'I am not a weapon in somebody else’s divorce.'],
-  ['A QR code going somewhere horrible', 'I will scan it. I will find out. You will not enjoy the email.'],
-  ['Anything I cannot explain at Christmas', 'My mother reads this website. She has opinions and a phone.'],
-] as const
-
-export function HouseRules() {
-  return (
-    <section id="rules" className="section scroll-mt-20">
-      <div className="container-dj grid gap-8 lg:grid-cols-[1fr_1.1fr] lg:items-start">
-        <div>
-          <p className="eyebrow">House rules</p>
-          <h2 className="mt-3 text-[38px] sm:text-[52px]">
-            I approve every sponsor by hand.
-          </h2>
-          <p className="lead mt-4">
-            Paying gets you the placement. It does not get you my dignity, which is separately priced and not
-            currently for sale. Anyone I reject is refunded in full immediately and we never speak of it again.
-          </p>
-          <div className="mt-6 rounded-card border border-hairline bg-white p-5">
-            <p className="text-[15px] font-semibold">The one hard rule</p>
-            <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted">
-              Minimum bid increment is {formatMoney(MIN_INCREMENT_CENTS)}. Bid {formatMoney(MIN_INCREMENT_CENTS)}{' '}
-              over someone and you have taken it from them. There is no reserve secret, no proxy bidding, and no
-              polite way to lose. Everything is on the board.
-            </p>
-          </div>
-
-        </div>
-
-        <div className="card-dj overflow-hidden">
-          <div className="border-b border-hairline2/70 px-6 py-4">
-            <h3 className="text-[22px]">Things that will not be going on my ass</h3>
-          </div>
-          <ul className="divide-y divide-hairline2/60">
-            {WONT.map(([title, note]) => (
-              <li key={title} className="flex gap-4 px-6 py-4">
-                <span aria-hidden className="mt-0.5 text-[18px] leading-none text-hotpink">✕</span>
-                <div>
-                  <p className="text-[15.5px] font-semibold">{title}</p>
-                  <p className="mt-0.5 text-[14px] text-muted">{note}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
         </div>
       </div>
     </section>

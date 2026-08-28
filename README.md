@@ -17,7 +17,8 @@ record of who held what outlives the tattoos.
 | Interactive placement map (SVG, keyboard accessible) | `components/ass-picker.tsx` |
 | Zone inventory, geometry and sales copy | `lib/zones.ts` |
 | Auction engine — outbid, anti-snipe, settlement | `lib/auction.ts` |
-| Stripe card holds, release and capture | `lib/stripe.ts` |
+| Stripe charges and the one refund path | `lib/stripe.ts` |
+| What the webhook decides about your money | `lib/webhook.ts` |
 | Schema | `migrations/001_init.sql` |
 | Brand tokens lifted from designjoy.co | `tailwind.config.ts`, `app/globals.css` |
 | Sponsor logo upload and storage | `lib/blob.ts`, `app/api/logo/route.ts` |
@@ -67,35 +68,51 @@ on the App Service. That is the designed fallback, not a broken deploy.
 
 ### Making it take real money
 
-Add these as repository secrets, then push (or re-run the workflow):
+Nobody working on this repo can create repository secrets, so none of the
+credentials below are hand-managed. Two workflows generate or fetch them and
+write them straight into the App Service:
 
-| Secret | Used for |
-| --- | --- |
-| `BMA_DATABASE_URL` | the **`brandmyass_app`** role against the brandmyass database — never `leadnet_app`, and never the admin role (see below) |
-| `BMA_STRIPE_SECRET_KEY` | server-side Stripe |
-| `BMA_STRIPE_PUBLISHABLE_KEY` | **build-time** — inlined into the client bundle |
-| `BMA_STRIPE_WEBHOOK_SECRET` | webhook signature verification |
+1. **Provision Brand My Ass infrastructure** (`setup-brandmyass-db.yml`) —
+   creates the database, migrates and seeds it, generates a dedicated
+   `brandmyass_app` Postgres role, creates the logo storage account, and writes
+   `DATABASE_URL` and the storage connection string to the App Service.
 
-Then, separately:
-
-1. Run the **Create the Brand My Ass database** workflow (or `npm run db:setup`
-   locally with admin credentials). Set a `BMA_DB_PASSWORD` secret first so it
-   creates the dedicated `brandmyass_app` role.
-
-   This matters more than it looks. `brandmyass-app` shares an App Service Plan
-   with the dashboard, so it shares the dashboard's **outbound IP** and is
+   The role matters more than it looks. `brandmyass-app` shares an App Service
+   Plan with the dashboard, so it shares the dashboard's **outbound IP** and is
    already inside the Postgres server's IP firewall. The firewall is not a
    boundary between the two apps — the database role is. A public site taking
    card details must not hold a credential that can read `optello`.
-2. Add a firewall rule on the Postgres server admitting the App Service's
-   outbound addresses — the dashboard's `deploy.yml` documents hitting exactly
-   this problem with GitHub runners.
-3. Point a Stripe webhook endpoint at
+
+2. **Configure Brand My Ass Stripe** (`setup-brandmyass-stripe.yml`) — finds a
+   Stripe secret key, registers the webhook endpoint at
    `https://brandmyass-app.azurewebsites.net/api/stripe/webhook` for
-   `payment_intent.amount_capturable_updated`, `payment_intent.payment_failed`
-   and `payment_intent.canceled`. **Until this exists no bid can ever become
-   the standing bid** — by design.
-4. Schedule `npm run auction:settle` at least daily.
+   `payment_intent.succeeded`, `payment_intent.payment_failed` and
+   `payment_intent.canceled`, and writes `STRIPE_SECRET_KEY` and
+   `STRIPE_WEBHOOK_SECRET` to the App Service. **Until that endpoint exists no
+   bid can ever become the standing bid** — by design. It finishes by signing a
+   payload with the secret it just installed and posting it at the live site, so
+   a green run means the wiring genuinely works.
+
+Two things it cannot do for you:
+
+- **The publishable key has to be typed in once.** Stripe has no API that
+  returns it. Run the Stripe workflow with the `publishable_key` input, then
+  **redeploy** — `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is compiled into the
+  client bundle at build time, so setting it changes nothing until a build
+  picks it up. Set it as a runtime app setting alone and the card form silently
+  never renders.
+- **A firewall rule on the Postgres server** admitting the App Service's
+  outbound addresses. The dashboard's `deploy.yml` documents hitting exactly
+  this problem with GitHub runners.
+
+Then schedule `npm run auction:settle` at least daily.
+
+If a `BMA_STRIPE_SECRET_KEY` secret does exist, the Stripe workflow prefers it
+and never touches the dashboard's key. Make it a **restricted** key (`rk_...`)
+limited to PaymentIntents (write), Refunds (write) and Webhook Endpoints
+(write): those four capabilities are everything this app does, and the fallback
+of borrowing the dashboard's full secret key puts a credential that can read
+every customer and payout on the account onto a public joke website.
 
 ## Setup
 
@@ -137,6 +154,9 @@ forgetting to run it costs nobody anything.
 3. Bid again, higher, with a different email.
 4. Check the Stripe dashboard: both payments are captured, and the first is NOT
    refunded. That is the model working as intended.
+5. Decline a card once (`4000 0000 0000 0002`), then pay with `4242…` on the
+   same form. The bid must still be promoted — a declined attempt is not the
+   end of a PaymentIntent, and treating it as one charges people for nothing.
 
 ## Moving this into its own repository
 
@@ -152,7 +172,10 @@ git push git@github.com:<you>/brandmyass.git brandmyass-only:main
 ## Known gaps
 
 - Outbid **emails** are described in the copy but not implemented — there is no
-  mail provider wired up. The hold release is real; the smug email is not.
-- Sponsor logo upload is a URL field, not a file upload.
+  mail provider wired up. The demotion is real; the smug email is not.
+- `logo_url` is accepted as given. It is written by our own upload endpoint in
+  the normal flow, but a hand-made request can put any URL there and it will be
+  rendered on the board once that bid pays. It should be constrained to the
+  storage account's host.
 - There is no admin screen for approving or rejecting sponsors; the copy
   promises hand approval, and right now that is done in SQL.

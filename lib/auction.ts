@@ -282,7 +282,18 @@ export async function createBid(input: CreateBidInput): Promise<CreatedBid> {
 }
 
 export interface ActivationResult {
-  outcome: 'activated' | 'too_late' | 'already_settled' | 'unknown_bid'
+  /**
+   * What happened, in the only terms the caller needs in order to decide about
+   * money:
+   *
+   *   activated         this bid is now (or already was) the standing bid.
+   *   already_displayed this bid went on and has since been outbid. It keeps
+   *                     its money — it bought the time it had.
+   *   too_late          the money moved but the logo never went on. This is the
+   *                     ONLY outcome that refunds.
+   *   unknown_bid       no such bid. Nothing is assumed and nothing is moved.
+   */
+  outcome: 'activated' | 'already_displayed' | 'too_late' | 'unknown_bid'
   /** The displaced bid is NOT refunded — it paid for the time its logo spent on
    *  the ass, and it had that time. Kept here only so the caller can log who
    *  was knocked off. */
@@ -317,12 +328,28 @@ export async function activateBid(bidId: number): Promise<ActivationResult> {
     const bid = bidRes.rows[0]
     if (!bid) return { outcome: 'unknown_bid', displacedBidId: null, extended: false, newClosesAt: null }
 
-    // Replayed webhook for a bid we already promoted.
+    // Replayed webhook for a bid we already promoted. `won` counts: it was the
+    // standing bid when its zone closed, so it was displayed and stays paid.
     if (bid.status === 'active' || bid.status === 'won') {
       return { outcome: 'activated', displacedBidId: null, extended: false, newClosesAt: null }
     }
+
+    // Displayed, then beaten. Keeps its money — that is the whole model.
+    if (bid.status === 'outbid') {
+      return { outcome: 'already_displayed', displacedBidId: null, extended: false, newClosesAt: null }
+    }
+
+    // `lost` and `cancelled` both mean this logo never went on. Reporting
+    // too_late for them is what makes the webhook's refund self-healing: if a
+    // first refund attempt failed, a redelivery lands here and tries again, and
+    // Stripe treats refunding an already-refunded charge as a no-op.
+    //
+    // `cancelled` reaching this point means money moved on a bid we had written
+    // off. A cancelled intent cannot pay, so it should not be possible — but if
+    // it ever is, the answer is the bidder's money back, not a placement they
+    // stopped expecting and certainly not a silent keep.
     if (bid.status !== 'pending') {
-      return { outcome: 'already_settled', displacedBidId: null, extended: false, newClosesAt: null }
+      return { outcome: 'too_late', displacedBidId: null, extended: false, newClosesAt: null }
     }
 
     const floor = await lockZoneAndReadFloor(client, bid.zone_id)

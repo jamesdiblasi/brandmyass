@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { activateBid, cancelBid } from '@/lib/auction'
 import { refundPayment, verifyWebhook } from '@/lib/stripe'
+import { handleStripeEvent, type BidPaymentRecord, type WebhookDeps } from '@/lib/webhook'
 import { query, queryOne } from '@/lib/db'
 
 // The signature is computed over the exact bytes Stripe sent. Any parsing or
@@ -16,7 +17,106 @@ export const runtime = 'nodejs'
  * is Stripe confirming the money actually moved, and that — not the browser
  * reporting success — is what promotes a bid. Trusting the client here would
  * let anyone take a placement off the market for free.
+ *
+ * This file is deliberately only wiring. Every decision about whose money is
+ * kept and whose is returned lives in lib/webhook.ts, where it is tested
+ * against mocks rather than against a live Stripe account and a live database.
  */
+
+/** How long a claim may sit unfinished before a redelivery may take it over. */
+const STALE_CLAIM = '5 minutes'
+
+const deps: WebhookDeps = {
+  /**
+   * The idempotency gate, as a claim rather than a receipt.
+   *
+   * The plain `insert … on conflict do nothing` version was correct only while
+   * the handler either finished or threw. If the process died in between — an
+   * App Service restart, an instance recycle — the row was committed, the work
+   * never happened, and Stripe's redelivery got told "already handled". Here
+   * that is a payment taken and no logo put on anyone.
+   *
+   * So the insert takes a claim, `completeEvent` stamps it done, and a claim
+   * that is both unfinished and older than a handler could plausibly still be
+   * running is reclaimable. Both writes are single statements, so two
+   * simultaneous deliveries cannot both win.
+   */
+  async claimEvent(event) {
+    const fresh = await queryOne<{ id: string }>(
+      `insert into webhook_events (id, type) values ($1, $2)
+       on conflict (id) do nothing
+       returning id`,
+      [event.id, event.type],
+    )
+    if (fresh) return 'claimed'
+
+    const reclaimed = await queryOne<{ id: string }>(
+      `update webhook_events
+       set received_at = now()
+       where id = $1
+         and handled_at is null
+         and received_at < now() - interval '${STALE_CLAIM}'
+       returning id`,
+      [event.id],
+    )
+    if (reclaimed) {
+      console.warn(`[webhook] retrying ${event.id}: an earlier delivery claimed it and never finished`)
+      return 'claimed'
+    }
+    return 'duplicate'
+  },
+
+  async completeEvent(eventId) {
+    await query('update webhook_events set handled_at = now() where id = $1', [eventId])
+  },
+
+  async releaseEvent(eventId) {
+    await query('delete from webhook_events where id = $1', [eventId])
+  },
+
+  async loadBid(bidId) {
+    const row = await queryOne<{
+      id: number
+      amount_cents: number
+      status: string
+      stripe_payment_intent_id: string | null
+    }>('select id, amount_cents, status, stripe_payment_intent_id from bids where id = $1', [bidId])
+    if (!row) return null
+    const bid: BidPaymentRecord = {
+      id: row.id,
+      amountCents: row.amount_cents,
+      status: row.status,
+      paymentIntentId: row.stripe_payment_intent_id,
+    }
+    return bid
+  },
+
+  async recordPayment(bidId, paymentIntentId) {
+    // `coalesce` on both columns: paid_at records when the money first cleared,
+    // not when a redelivery was processed, and the intent id is only ever
+    // backfilled — the handler has already refused to act on a mismatch, so an
+    // existing value here is the right one and is left alone.
+    await query(
+      `update bids
+       set paid_at = coalesce(paid_at, now()),
+           stripe_payment_intent_id = coalesce(stripe_payment_intent_id, $2),
+           updated_at = now()
+       where id = $1`,
+      [bidId, paymentIntentId],
+    )
+  },
+
+  activateBid,
+  cancelBid,
+  refund: refundPayment,
+
+  async markRefunded(bidId) {
+    await query('update bids set refunded_at = coalesce(refunded_at, now()), updated_at = now() where id = $1', [
+      bidId,
+    ])
+  },
+}
+
 export async function POST(req: Request) {
   const signature = req.headers.get('stripe-signature')
   if (!signature) return NextResponse.json({ error: 'Missing signature' }, { status: 400 })
@@ -31,73 +131,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
-  // Idempotency. Stripe retries for up to three days, and a replayed
-  // activation must not release a second person's hold. The insert either wins
-  // the race or tells us this event was already handled.
-  const inserted = await queryOne<{ id: string }>(
-    `insert into webhook_events (id, type) values ($1, $2)
-     on conflict (id) do nothing
-     returning id`,
-    [event.id, event.type],
-  )
-  if (!inserted) return NextResponse.json({ received: true, duplicate: true })
-
   try {
-    switch (event.type) {
-      case 'payment_intent.succeeded': {
-        const intent = event.data.object as Stripe.PaymentIntent
-        const bidId = Number(intent.metadata?.bid_id)
-        if (!Number.isSafeInteger(bidId)) break
-
-        await query('update bids set paid_at = coalesce(paid_at, now()) where id = $1', [bidId])
-
-        const result = await activateBid(bidId)
-
-        if (result.outcome === 'activated') {
-          // The displaced bid is NOT refunded. It paid for the time its logo
-          // spent on the ass and it got that time.
-          if (result.displacedBidId) {
-            console.log(`[webhook] bid ${bidId} displaced bid ${result.displacedBidId} — no refund, as designed`)
-          }
-          if (result.extended) {
-            console.log(`[webhook] anti-snipe: bid ${bidId} pushed close to ${result.newClosesAt}`)
-          }
-        } else if (result.outcome === 'too_late') {
-          // Paid, but somebody went higher while the card was clearing, so this
-          // logo never went on at all. Nothing was sold — give the money back.
-          // A failure here means somebody is out of pocket for nothing, so it
-          // is logged loudly rather than swallowed.
-          await refundPayment(intent.id)
-            .then(() => query('update bids set refunded_at = now() where id = $1', [bidId]))
-            .catch((err) => console.error('[webhook] FAILED to refund a never-displayed bid', intent.id, err))
-        }
-        break
-      }
-
-      case 'payment_intent.payment_failed': {
-        const intent = event.data.object as Stripe.PaymentIntent
-        const bidId = Number(intent.metadata?.bid_id)
-        if (Number.isSafeInteger(bidId)) await cancelBid(bidId)
-        break
-      }
-
-      case 'payment_intent.canceled': {
-        const intent = event.data.object as Stripe.PaymentIntent
-        const bidId = Number(intent.metadata?.bid_id)
-        if (Number.isSafeInteger(bidId)) await cancelBid(bidId)
-        break
-      }
-
-      default:
-        break
-    }
+    const outcome = await handleStripeEvent(event, deps)
+    return NextResponse.json({ received: true, ...outcome })
   } catch (err) {
+    // 500 buys three days of Stripe retries. The handler has already released
+    // its claim, so a retry is a genuine second attempt — which is the point:
+    // the failure this most often covers is a refund that did not go through,
+    // and that is somebody out of pocket for nothing until it does.
     console.error('[webhook] handler failed for', event.type, err)
-    // Drop the idempotency record so Stripe's retry gets a real second attempt
-    // rather than being told "already handled" for work that never happened.
-    await query('delete from webhook_events where id = $1', [event.id]).catch(() => {})
     return NextResponse.json({ error: 'Handler failed' }, { status: 500 })
   }
-
-  return NextResponse.json({ received: true })
 }

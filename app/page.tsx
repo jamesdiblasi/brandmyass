@@ -1,6 +1,6 @@
 import { AuctionBoard } from '@/components/auction-board'
 import { SiteFooter, SiteHeader } from '@/components/sections/chrome'
-import { Faq, HouseRules, HowItWorks, InventoryStrip, Numbers } from '@/components/sections/content'
+import { Faq, HowItWorks, InventoryStrip, Numbers } from '@/components/sections/content'
 import { Waitlist } from '@/components/sections/waitlist'
 import { getAuctionState, type AuctionState } from '@/lib/auction'
 import { ZONES } from '@/lib/zones'
@@ -99,7 +99,6 @@ export default async function Home() {
 
         <HowItWorks />
         <Numbers />
-        <HouseRules />
         <Faq />
         <Waitlist />
       </main>

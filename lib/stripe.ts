@@ -21,6 +21,19 @@ import { CURRENCY } from './config'
 // LeadNet dashboard's pin — same Stripe account, independently upgradable apps.
 const API_VERSION = '2026-08-26.dahlia'
 
+/**
+ * Stamped into the metadata of every PaymentIntent this app creates, and
+ * required by the webhook before it will act on one.
+ *
+ * Stripe webhook endpoints are scoped to an ACCOUNT, not to an application.
+ * This app shares a Stripe account with the LeadNet dashboard, so this
+ * endpoint's `payment_intent.succeeded` feed includes the dashboard's invoice
+ * payments. Everything downstream of the signature check therefore has to be
+ * able to answer "is this mine?", and a `bid_id` key anyone could also happen
+ * to use is not an answer. See `bidIdFromIntent` in lib/webhook.ts.
+ */
+export const APP_TAG = 'brandmyass'
+
 let cached: Stripe | null = null
 
 export function getStripe(): Stripe {
@@ -62,6 +75,7 @@ export async function chargeBid(
       description: `${params.zoneName} — ${params.sponsorName}`,
       statement_descriptor_suffix: 'BRANDMYASS',
       metadata: {
+        app: APP_TAG,
         bid_id: String(params.bidId),
         zone_id: params.zoneId,
         zone_name: params.zoneName,

@@ -24,13 +24,24 @@ import { formatMoney } from '@/lib/money'
  * something a screen reader cannot use.
  */
 
+/** Kept as a constant because the pill is sized from its own text length. */
+const PREVIEW_LABEL = 'PREVIEW · NOT PAID'
+
 interface Props {
   states: Map<string, ZoneAuctionState>
   selectedId: string | null
   onSelect: (zoneId: string) => void
+  /**
+   * A logo uploaded but not yet paid for, shown on its zone so the visitor can
+   * see the thing they are buying before they buy it. It deliberately paints
+   * OVER whatever that placement is currently wearing — the question being
+   * answered is "how would mine look there", not "who holds it" — and it is
+   * labelled NOT PAID so the answer is never mistaken for a purchase.
+   */
+  preview?: { zoneId: string; logoUrl: string } | null
 }
 
-export function AssPicker({ states, selectedId, onSelect }: Props) {
+export function AssPicker({ states, selectedId, onSelect, preview = null }: Props) {
   const [hovered, setHovered] = useState<string | null>(null)
   const uid = useId().replace(/:/g, '')
   const clipId = `body-clip-${uid}`
@@ -89,6 +100,7 @@ export function AssPicker({ states, selectedId, onSelect }: Props) {
             const isSelected = selectedId === zone.id
             const isHovered = hovered === zone.id
             const taken = Boolean(state?.topBid)
+            const isPreviewZone = preview?.zoneId === zone.id
             const tier = TIER_COLOR[zone.tier]
 
             const opacity = isSelected ? 0.48 : isHovered ? 0.32 : taken ? 0.2 : 0.07
@@ -122,9 +134,9 @@ export function AssPicker({ states, selectedId, onSelect }: Props) {
                   height={zone.rect.h - 6}
                   rx={12}
                   fill="none"
-                  stroke={isSelected ? tier : '#00000024'}
-                  strokeWidth={isSelected ? 3.5 : 1.5}
-                  strokeDasharray={taken || isSelected ? undefined : '7 6'}
+                  stroke={isPreviewZone ? '#ff5a00' : isSelected ? tier : '#00000024'}
+                  strokeWidth={isPreviewZone || isSelected ? 3.5 : 1.5}
+                  strokeDasharray={isPreviewZone ? '9 5' : taken || isSelected ? undefined : '7 6'}
                   className="transition-all duration-200"
                 />
               </g>
@@ -146,7 +158,9 @@ export function AssPicker({ states, selectedId, onSelect }: Props) {
           const isSelected = selectedId === zone.id
           const tier = TIER_COLOR[zone.tier]
           const taken = Boolean(state?.topBid)
-          const logo = state?.topBid?.logoUrl ?? null
+          const previewLogo = preview?.zoneId === zone.id ? preview.logoUrl : null
+          const isPreview = Boolean(previewLogo)
+          const logo = previewLogo ?? state?.topBid?.logoUrl ?? null
           const price = formatMoney(state?.reserveCents ?? zone.reserveCents)
           // What it costs to take this placement off whoever is wearing it.
           const takeLabel = `TAKE IT — ${formatMoney(state?.minimumBidCents ?? zone.reserveCents)}`
@@ -154,6 +168,7 @@ export function AssPicker({ states, selectedId, onSelect }: Props) {
           // the string. 6.2px per character at 11px bold is close enough that
           // the padding absorbs the error.
           const takeWidth = takeLabel.length * 6.2 + 16
+          const previewWidth = PREVIEW_LABEL.length * 6.2 + 16
 
           return (
             <g
@@ -194,9 +209,12 @@ export function AssPicker({ states, selectedId, onSelect }: Props) {
                 <image
                   href={logo}
                   x={zone.rect.x + 12}
-                  y={zone.rect.y + 10}
+                  y={zone.rect.y + 8}
                   width={zone.rect.w - 24}
-                  height={zone.rect.h - 40}
+                  // Leaves a clear band at the foot of the zone for the name and
+                  // the price pill. At -40 the name's cap height overlapped the
+                  // bottom of the image.
+                  height={zone.rect.h - 46}
                   preserveAspectRatio="xMidYMid meet"
                   clipPath={`url(#${clipId})`}
                   className="pointer-events-none"
@@ -217,13 +235,41 @@ export function AssPicker({ states, selectedId, onSelect }: Props) {
                 paintOrder="stroke"
                 className="pointer-events-none"
               >
-                {taken ? (state?.topBid?.sponsorName ?? shortLabel(zone)) : shortLabel(zone)}
+                {isPreview
+                  ? shortLabel(zone)
+                  : taken
+                    ? (state?.topBid?.sponsorName ?? shortLabel(zone))
+                    : shortLabel(zone)}
               </text>
 
               {/* The overlay the whole mechanic depends on: every placement,
                   including the ones already wearing somebody's logo, states
                   that it is still buyable and exactly what it costs to take. */}
-              {taken ? (
+              {isPreview ? (
+                <>
+                  <rect
+                    x={zone.anchor.x - previewWidth / 2}
+                    y={zone.rect.y + zone.rect.h - 20}
+                    width={previewWidth}
+                    height={17}
+                    rx={8.5}
+                    fill="#ff5a00"
+                    className="pointer-events-none"
+                  />
+                  <text
+                    x={zone.anchor.x}
+                    y={zone.rect.y + zone.rect.h - 7.5}
+                    textAnchor="middle"
+                    fontSize="11"
+                    fontWeight="700"
+                    letterSpacing="0.4"
+                    fill="#fff"
+                    className="pointer-events-none"
+                  >
+                    {PREVIEW_LABEL}
+                  </text>
+                </>
+              ) : taken ? (
                 <>
                   <rect
                     x={zone.anchor.x - takeWidth / 2}
