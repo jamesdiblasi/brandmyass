@@ -30,7 +30,7 @@ export function HowItWorks() {
       <div className="container-dj">
         <p className="eyebrow">How this works</p>
         <h2 className="mt-3 max-w-3xl text-[40px] sm:text-[56px]">
-          It is a real auction, with real money, on a real arse.
+          It is a real auction, with real money, on a real ass.
         </h2>
         <p className="lead mt-4 max-w-2xl">
           Three steps. None of them are a metaphor.
@@ -57,8 +57,8 @@ export function HowItWorks() {
 const NUMBERS = [
   {
     stat: '1',
-    label: 'Arse',
-    note: 'Total addressable inventory. There are no competing arses in this market, so share of voice is a clean 100%.',
+    label: 'Ass',
+    note: 'Total addressable inventory. There are no competing asses in this market, so share of voice is a clean 100%.',
   },
   {
     stat: '~14,000',
@@ -112,7 +112,7 @@ export function Numbers() {
 
 const WONT = [
   ['Anything hateful', 'Obvious. Instant rejection, refunded in full, no discussion.'],
-  ['Crypto', 'I have been burned before and so, spiritually, has my arse.'],
+  ['Crypto', 'I have been burned before and so, spiritually, has my ass.'],
   ['Your ex’s name', 'I am not a weapon in somebody else’s divorce.'],
   ['A QR code going somewhere horrible', 'I will scan it. I will find out. You will not enjoy the email.'],
   ['Anything I cannot explain at Christmas', 'My mother reads this website. She has opinions and a phone.'],
@@ -140,20 +140,11 @@ export function HouseRules() {
             </p>
           </div>
 
-          <div className="mt-4 rounded-card border border-flame/30 bg-flame/5 p-5">
-            <p className="text-[15px] font-semibold">Where the money goes</p>
-            <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted">
-              The tattoos, the printing, the photography, and a holiday I have been putting off for two years.
-              That last one is not a throwaway line. When the auction closes, whoever holds each placement at the
-              end gets printed one final time — and comes on the holiday. Your logo will be in the photographs,
-              on a beach, on my arse, whether it wants to be there or not.
-            </p>
-          </div>
         </div>
 
         <div className="card-dj overflow-hidden">
           <div className="border-b border-hairline2/70 px-6 py-4">
-            <h3 className="text-[22px]">Things that will not be going on my arse</h3>
+            <h3 className="text-[22px]">Things that will not be going on my ass</h3>
           </div>
           <ul className="divide-y divide-hairline2/60">
             {WONT.map(([title, note]) => (
@@ -184,7 +175,7 @@ const FAQ = [
   ],
   [
     'Do I get proof?',
-    'Weekly timestamped photographs. Of my arse. With your logo on it. You are, right now, seriously considering buying this. Sit with that for a second.',
+    'Weekly timestamped photographs. Of my ass. With your logo on it. You are, right now, seriously considering buying this. Sit with that for a second.',
   ],
   [
     'What happens if I get outbid?',
@@ -197,6 +188,10 @@ const FAQ = [
   [
     'Can my logo be bigger than the placement?',
     'No. This is a rate card, not a negotiation. The sizes are printed next to the prices for exactly this reason.',
+  ],
+  [
+    'Where does the money go?',
+    'The tattoos, the photography, the hosting, and a holiday I have been putting off for two years. The holiday will also be photographed. Your logo will be there. (For the final bidders).',
   ],
   [
     'What if nobody bids on my favourite cheek?',

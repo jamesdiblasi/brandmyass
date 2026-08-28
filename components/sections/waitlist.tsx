@@ -36,7 +36,7 @@ export function Waitlist() {
           <div className="max-w-2xl">
             <p className="eyebrow text-white/50">Coming next</p>
             <h2 className="mt-3 text-[38px] text-white sm:text-[54px]">
-              Want this done to your arse?
+              Want this done to your ass?
             </h2>
             <p className="mt-4 text-[17px] leading-relaxed text-white/60 sm:text-[19px]">
               I am building the platform so anybody can auction their own. Same live bidding, same anti-snipe

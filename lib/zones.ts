@@ -77,7 +77,7 @@ export const ZONES: Zone[] = [
     name: 'The Tramp Stamp',
     pitch: 'The most historically regrettable postcode on the human body.',
     blurb:
-      'The widest single placement on the arse, and the only one that arrives with a cultural legacy attached. Sits exactly where a waistband gives up, which makes it the first thing visible every single time I bend over to plug in a monitor. Forty centimetres of uninterrupted lower back that has been sitting there since 2004 waiting for something to happen to it. Congratulations — you are what happens to it.',
+      'The widest single placement on the ass, and the only one that arrives with a cultural legacy attached. Sits exactly where a waistband gives up, which makes it the first thing visible every single time I bend over to plug in a monitor. Forty centimetres of uninterrupted lower back that has been sitting there since 2004 waiting for something to happen to it. Congratulations — you are what happens to it.',
     tier: 'prime',
     size: '40 × 14 cm',
     reserveCents: 50_000,
@@ -111,7 +111,7 @@ export const ZONES: Zone[] = [
   {
     id: 'left-prime',
     name: 'Left Prime Cheek',
-    pitch: 'The Times Square of my arse.',
+    pitch: 'The Times Square of my ass.',
     blurb:
       'The full sweep of the left cheek. Maximum surface, maximum curve, maximum shame. This is the placement people will photograph. It is also the placement my mother will see first, so please make it something I can explain at Christmas.',
     tier: 'prime',

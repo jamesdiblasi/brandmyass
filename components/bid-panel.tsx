@@ -330,7 +330,7 @@ function CardStep({ onDone }: { onDone: () => void }) {
       <PaymentElement />
       {error && <p className="rounded-btn bg-hotpink/10 px-3 py-2 text-[14px] font-medium text-hotpink">{error}</p>}
       <button type="submit" disabled={!stripe || busy} className="btn-filled btn-lg w-full">
-        {busy ? 'Talking to your bank…' : 'Pay and get on the arse'}
+        {busy ? 'Talking to your bank…' : 'Pay and get on my ass'}
       </button>
     </form>
   )

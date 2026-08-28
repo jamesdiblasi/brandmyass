@@ -55,7 +55,7 @@ export async function POST(req: Request) {
 
         if (result.outcome === 'activated') {
           // The displaced bid is NOT refunded. It paid for the time its logo
-          // spent on the arse and it got that time.
+          // spent on the ass and it got that time.
           if (result.displacedBidId) {
             console.log(`[webhook] bid ${bidId} displaced bid ${result.displacedBidId} — no refund, as designed`)
           }

@@ -11,7 +11,7 @@ import { CURRENCY } from './config'
  *
  * There is exactly one refund path, and it is not a courtesy. If a payment
  * confirms AFTER someone else has already gone higher, that logo never went on
- * the arse at all — nothing was sold, so the money goes back. Every other
+ * the ass at all — nothing was sold, so the money goes back. Every other
  * outcome keeps the payment.
  */
 

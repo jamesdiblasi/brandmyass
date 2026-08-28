@@ -17,7 +17,7 @@ export const MIN_INCREMENT_CENTS = 1_000 // $10
 /**
  * There is no deposit and no hold. A bid is CHARGED IN FULL the moment it is
  * placed, and it is not refunded when a later bidder takes the placement — the
- * money buys the time the logo actually spends on the arse, not a claim on the
+ * money buys the time the logo actually spends on the ass, not a claim on the
  * final outcome.
  *
  * The single exception is a bid whose payment lands after somebody has already
@@ -39,7 +39,7 @@ export const POLL_INTERVAL_MS = 8_000
 export const SITE = {
   name: 'Brand My Ass',
   domain: 'brandmyass.com',
-  tagline: 'Premium out-of-home advertising. On my arse.',
+  tagline: 'Premium out-of-home advertising. On my ass.',
   /** Where Stripe sends people back to. Set PUBLIC_BASE_URL in production. */
   baseUrl: process.env.PUBLIC_BASE_URL || 'http://localhost:3002',
   contactEmail: 'sponsors@brandmyass.com',

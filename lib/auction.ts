@@ -284,7 +284,7 @@ export async function createBid(input: CreateBidInput): Promise<CreatedBid> {
 export interface ActivationResult {
   outcome: 'activated' | 'too_late' | 'already_settled' | 'unknown_bid'
   /** The displaced bid is NOT refunded — it paid for the time its logo spent on
-   *  the arse, and it had that time. Kept here only so the caller can log who
+   *  the ass, and it had that time. Kept here only so the caller can log who
    *  was knocked off. */
   displacedBidId: number | null
   /** True when this bid landed inside the anti-snipe window and pushed the clock. */
@@ -336,7 +336,7 @@ export async function activateBid(bidId: number): Promise<ActivationResult> {
     }
 
     // Demote the incumbent. Its money stays where it is — it bought the time
-    // its logo spent on the arse, and that time happened.
+    // its logo spent on the ass, and that time happened.
     let displacedBidId: number | null = null
     if (floor.topBidId != null) {
       const prev = await client.query<{ id: number }>(

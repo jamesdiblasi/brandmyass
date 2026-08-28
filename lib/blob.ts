@@ -63,7 +63,7 @@ export function isBlobConfigured(): boolean {
  */
 export async function uploadLogo(buf: Buffer): Promise<string> {
   if (buf.byteLength > MAX_LOGO_BYTES) {
-    throw new LogoError('That image is over 2 MB. It is going on an arse, not a billboard.')
+    throw new LogoError('That image is over 2 MB. It is going on an ass, not a billboard.')
   }
   const { type, ext } = sniffImage(buf)
 

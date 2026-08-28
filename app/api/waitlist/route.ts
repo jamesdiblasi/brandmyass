@@ -3,7 +3,7 @@ import { query } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-/** "Do this to my arse too" — the upsell list. */
+/** "Do this to my ass too" — the upsell list. */
 export async function POST(req: Request) {
   let body: { email?: unknown; note?: unknown }
   try {

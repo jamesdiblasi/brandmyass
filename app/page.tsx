@@ -60,13 +60,13 @@ export default async function Home() {
           <div className="max-w-4xl">
             <span className="pill border border-hairline bg-white text-muted">
               <span className="live-dot" aria-hidden />
-              Live auction — nine placements, one arse
+              Live auction — nine placements, one ass
             </span>
 
             <h1 className="mt-6 text-[52px] leading-[0.92] sm:text-[82px]">
               Your brand.
               <br />
-              My arse.
+              My ass.
             </h1>
 
             <p className="lead mt-6 max-w-2xl">

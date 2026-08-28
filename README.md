@@ -1,6 +1,6 @@
 # Brand My Ass
 
-Premium out-of-home advertising. On my arse.
+Premium out-of-home advertising. On my ass.
 
 Nine placements on one backside, sold by live auction, applied as temporary
 tattoos for **at most two weeks** — less if somebody outbids you. Every bid is
@@ -43,7 +43,7 @@ uploader cannot pick its own path or overwrite somebody else's logo.
   on the board.
 - **Paid in full at bid time.** No deposit, no hold, no capture step. Being
   outbid is **not refunded** — the payment buys the time the logo spends on the
-  arse, and that time happened. The one refund path is a payment confirming
+  ass, and that time happened. The one refund path is a payment confirming
   after someone already bid higher, where the logo never went on at all.
 - **Anti-snipe:** any bid inside the final 5 minutes pushes that zone's close to
   5 minutes from now. Extensions reset the clock rather than stacking, so the

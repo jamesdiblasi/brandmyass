@@ -78,7 +78,7 @@ create table if not exists webhook_events (
   received_at  timestamptz not null default now()
 );
 
--- Waitlist for the "let me do this to your arse too" upsell.
+-- Waitlist for the "let me do this to your ass too" upsell.
 create table if not exists waitlist (
   id          bigserial   primary key,
   email       text        not null unique check (position('@' in email) > 1),

@@ -6,7 +6,7 @@ import type { ZoneAuctionState } from '@/lib/auction'
 import { formatMoney } from '@/lib/money'
 
 /**
- * The interactive arse.
+ * The interactive ass.
  *
  * Structure, from the bottom up:
  *   1. the body — five overlapping shapes filled as ONE group, so the joins
@@ -20,7 +20,7 @@ import { formatMoney } from '@/lib/money'
  *      sliced in half at the body's edge
  *
  * Every zone is a real focusable button with an aria-label, so the whole thing
- * is operable from a keyboard. A site about arses is not an excuse to ship
+ * is operable from a keyboard. A site about asses is not an excuse to ship
  * something a screen reader cannot use.
  */
 
@@ -188,7 +188,7 @@ export function AssPicker({ states, selectedId, onSelect }: Props) {
                   wearing. `meet` keeps it inside its own zone; the clip keeps it
                   inside the BODY. Text is deliberately unclipped so labels are
                   never sliced at the silhouette's edge, but an image hanging off
-                  the side of the arse just looks broken — so this one element
+                  the side of the ass just looks broken — so this one element
                   opts back into the clip. */}
               {logo && (
                 <image
