@@ -196,16 +196,19 @@ forgetting to run it costs nobody anything.
    same form. The bid must still be promoted — a declined attempt is not the
    end of a PaymentIntent, and treating it as one charges people for nothing.
 
-## Moving this into its own repository
+## Repository secrets
 
-It was built self-contained for exactly this reason — nothing here imports from
-the parent project.
+This repo deploys itself; these live in Settings → Secrets and variables →
+Actions. All were previously secrets on `leadnet-dashboard` — copy the values
+across.
 
-```bash
-git subtree split --prefix=brandmyass -b brandmyass-only
-# then, against an empty repo you have created:
-git push git@github.com:<you>/brandmyass.git brandmyass-only:main
-```
+| Name | Kind | Needed for |
+| --- | --- | --- |
+| `AZURE_CREDENTIALS` | secret | every deploy (same service principal the dashboard uses) |
+| `BMA_STRIPE_SECRET_KEY` | secret | applying the Stripe key to the App Service |
+| `BMA_STRIPE_WEBHOOK_SECRET` | secret | same, for signature verification |
+| `DATABASE_ADMIN_URL` | secret | only the database workflow — role/migration re-runs |
+| `BMA_DATABASE_URL` | secret | optional; the DB workflow normally provisions this itself |
 
 ## Known gaps
 

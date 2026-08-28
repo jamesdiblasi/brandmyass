@@ -1,0 +1,296 @@
+name: Provision Brand My Ass infrastructure
+
+# Provisions everything brandmyass needs and hands the credentials straight to
+# the App Service:
+#
+#   * the `brandmyass` database on the existing optello-pg Flexible Server,
+#     migrated and seeded
+#   * a dedicated `brandmyass_app` Postgres role, password generated here
+#   * a SEPARATE Azure Storage account holding sponsor logos
+#
+# The storage account is deliberately not shared with anything else. Its blobs
+# are publicly readable by design — a sponsor's logo has to render for every
+# visitor — and putting world-readable marketing images in a container that also
+# holds business data is how one wrong access level becomes a leak.
+#
+# It runs here rather than from a laptop because the admin credential already
+# lives here, as the DATABASE_ADMIN_URL repository secret the dashboard's
+# deploy.yml uses for its own migrations.
+#
+# ADDITIVE ONLY. It creates a NEW database alongside `optello` and never
+# connects to `optello` except to issue CREATE DATABASE, which any connection
+# may do. Nothing in this workflow can touch the dashboard's data.
+#
+# Every step is idempotent, so re-running is a no-op:
+#   * db:create  checks pg_database first and swallows duplicate_database
+#   * db:migrate records applied filenames in schema_migrations
+#   * db:seed    inserts the auction row `on conflict do nothing` and refreshes
+#                zone reserves without resetting any clock or bid history
+#
+# PREREQUISITES, both outside this file:
+#   * DATABASE_ADMIN_URL — the migrating role. Any database on the server will
+#     do; the connection is only used to issue CREATE DATABASE and grants.
+#   * a firewall rule on optello-pg admitting GitHub-hosted runners. Their
+#     addresses are dynamic, so this is "Allow public access from Azure
+#     services" plus the runner ranges. Without it this hangs until the
+#     connection times out — the same prerequisite deploy.yml documents.
+#
+# THE APPLICATION CREDENTIAL
+#
+# This workflow provisions a dedicated `brandmyass_app` role and writes its
+# connection string straight into the App Service configuration. The password is
+# GENERATED here and never becomes a hand-managed secret — it exists only in
+# Azure's app settings, and re-running this workflow rotates it.
+#
+# Why a dedicated role rather than reusing leadnet_app: brandmyass-app shares an
+# App Service Plan with the dashboard and therefore shares its OUTBOUND IP, so
+# it already sits inside the Postgres server's IP firewall. That firewall is not
+# a boundary between the two applications; the database role is the only thing
+# that still is. A public site accepting card details must not hold a credential
+# that can read `optello`.
+#
+# The shared plan cuts the other way too, helpfully: the firewall already admits
+# the App Service outbound addresses, because the dashboard connects from them.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'migrations/**'
+      - '.github/workflows/setup-db.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: setup-brandmyass-db
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    name: Create, migrate and seed
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Derive the brandmyass connection string
+        # The admin secret points at whichever database the dashboard migrates.
+        # Swapping only the path yields the same credentials against the new
+        # database. It is masked immediately: GitHub masks the secret's exact
+        # text, and this derived string differs from it by the database name, so
+        # without add-mask a later `set -x` or error dump could print a live
+        # password in clear.
+        env:
+          DATABASE_ADMIN_URL: ${{ secrets.DATABASE_ADMIN_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_ADMIN_URL:-}" ]; then
+            echo "::error::DATABASE_ADMIN_URL is not set. It is the same secret deploy.yml uses for migrations."
+            exit 1
+          fi
+          DB_URL=$(node -e '
+            const u = new URL(process.env.DATABASE_ADMIN_URL);
+            u.pathname = "/" + (process.env.BMA_DB_NAME || "brandmyass");
+            process.stdout.write(u.toString());
+          ')
+          echo "::add-mask::$DB_URL"
+          echo "DATABASE_URL=$DB_URL" >> "$GITHUB_ENV"
+          echo "Derived a connection string for the brandmyass database."
+
+      - name: Create the database
+        env:
+          DATABASE_ADMIN_URL: ${{ secrets.DATABASE_ADMIN_URL }}
+        run: npm run db:create
+
+      - name: Apply migrations
+        run: npm run db:migrate
+
+      - name: Seed the auction
+        env:
+          BMA_CAMPAIGN_DAYS: ${{ vars.BMA_CAMPAIGN_DAYS || '21' }}
+          BMA_GOAL_CENTS: ${{ vars.BMA_GOAL_CENTS || '250000' }}
+        run: npm run db:seed
+
+      - name: Verify the schema
+        # Proves the schema is really there and reachable, rather than trusting
+        # three green steps. Prints the board as the app will read it.
+        run: |
+          node -e '
+            const { Client } = require("pg");
+            (async () => {
+              const c = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: true } });
+              await c.connect();
+              const t = await c.query("select table_name from information_schema.tables where table_schema = $1 order by 1", ["public"]);
+              console.log("tables:", t.rows.map(r => r.table_name).join(", "));
+              const a = await c.query("select opens_at, closes_at, goal_cents from auction where id = 1");
+              const z = await c.query("select zone_id, reserve_cents from zone_state order by reserve_cents desc");
+              console.log("auction closes:", a.rows[0]?.closes_at?.toISOString() ?? "MISSING");
+              console.log("zones:", z.rowCount);
+              for (const r of z.rows) console.log(`  ${r.zone_id.padEnd(16)} $${(r.reserve_cents / 100).toFixed(0)}`);
+              if (z.rowCount === 0) { console.error("::error::no zones seeded"); process.exit(1); }
+              await c.end();
+            })().catch(e => { console.error(e); process.exit(1); });
+          '
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Locate the App Service
+        env:
+          APP_NAME: ${{ vars.BRANDMYASS_APP_NAME || 'brandmyass-app' }}
+        run: |
+          set -euo pipefail
+          INFO=$(az webapp list --query "[?name=='${APP_NAME}'] | [0].{rg:resourceGroup, loc:location}" -o json)
+          if [ -z "$INFO" ] || [ "$INFO" = "null" ]; then
+            echo "::error::Could not find the ${APP_NAME} web app. Run the deploy workflow first."
+            exit 1
+          fi
+          echo "RG=$(echo "$INFO"  | jq -r .rg)"  >> "$GITHUB_ENV"
+          echo "LOC=$(echo "$INFO" | jq -r .loc)" >> "$GITHUB_ENV"
+          echo "Found ${APP_NAME} in $(echo "$INFO" | jq -r .rg)"
+
+      - name: Create the logo storage account
+        # Storage account names are globally unique across Azure and allow only
+        # 3-24 lowercase alphanumerics, so the name is derived from a hash of the
+        # subscription id: unique in practice, and identical on every re-run so
+        # this step is idempotent rather than creating a new account each time.
+        run: |
+          set -euo pipefail
+          SUB=$(az account show --query id -o tsv)
+          SA="bma$(printf '%s' "$SUB" | sha1sum | cut -c1-12)"
+          echo "Storage account: $SA"
+
+          if az storage account show -g "$RG" -n "$SA" >/dev/null 2>&1; then
+            echo "· ${SA} already exists"
+          else
+            az storage account create -g "$RG" -n "$SA" -l "$LOC" \
+              --sku Standard_LRS --kind StorageV2 \
+              --min-tls-version TLS1_2 --https-only true \
+              --allow-blob-public-access true -o none
+            echo "✓ created ${SA}"
+          fi
+
+          KEY=$(az storage account keys list -g "$RG" -n "$SA" --query "[0].value" -o tsv)
+          echo "::add-mask::$KEY"
+
+          # public-access blob = anonymous READ of blobs, not of the container
+          # listing. Visitors can fetch a logo by its URL; nobody can enumerate
+          # what is in there, and nobody can write without the key.
+          az storage container create --account-name "$SA" --account-key "$KEY" \
+            -n logos --public-access blob -o none
+          echo "✓ container 'logos' ready (anonymous read, no listing, no anonymous write)"
+
+          CONN=$(az storage account show-connection-string -g "$RG" -n "$SA" --query connectionString -o tsv)
+          echo "::add-mask::$CONN"
+          echo "STORAGE_CONN=$CONN" >> "$GITHUB_ENV"
+
+      - name: Provision the application database role
+        # Grants are issued on EXISTING objects, not just as default privileges.
+        # `alter default privileges` only affects tables created after it runs,
+        # and the migrations have already created every table by this point — a
+        # role set up with defaults alone would connect successfully and then be
+        # denied on every single query.
+        env:
+          DATABASE_ADMIN_URL: ${{ secrets.DATABASE_ADMIN_URL }}
+          ROLE: brandmyass_app
+        run: |
+          set -euo pipefail
+          APP_DB_URL=$(node -e '
+            const crypto = require("crypto");
+            const { Client } = require("pg");
+            (async () => {
+              const role = process.env.ROLE;
+              if (!/^[a-z_][a-z0-9_]{0,62}$/.test(role)) throw new Error("unsafe role identifier");
+
+              // base64url so the password needs no percent-encoding inside a
+              // connection string, and no shell quoting downstream.
+              const password = crypto.randomBytes(32).toString("base64url");
+
+              const admin = new Client({ connectionString: process.env.DATABASE_ADMIN_URL, ssl: { rejectUnauthorized: true } });
+              await admin.connect();
+              const pw = admin.escapeLiteral(password);
+              const { rows } = await admin.query("select 1 from pg_roles where rolname = $1", [role]);
+              if (rows.length) {
+                await admin.query(`alter role ${role} with login password ${pw}`);
+                console.error(`· role ${role} existed — password rotated`);
+              } else {
+                await admin.query(`create role ${role} with login password ${pw}`);
+                console.error(`✓ created role ${role}`);
+              }
+              await admin.end();
+
+              const target = new URL(process.env.DATABASE_ADMIN_URL);
+              target.pathname = "/brandmyass";
+              const db = new Client({ connectionString: target.toString(), ssl: { rejectUnauthorized: true } });
+              await db.connect();
+              await db.query(`grant connect on database brandmyass to ${role}`);
+              await db.query(`grant usage on schema public to ${role}`);
+              await db.query(`grant select, insert, update, delete on all tables in schema public to ${role}`);
+              await db.query(`grant usage, select on all sequences in schema public to ${role}`);
+              await db.query(`alter default privileges in schema public grant select, insert, update, delete on tables to ${role}`);
+              await db.query(`alter default privileges in schema public grant usage, select on sequences to ${role}`);
+              await db.end();
+              console.error(`✓ granted ${role} access to brandmyass (existing objects and future ones)`);
+
+              const appUrl = new URL(process.env.DATABASE_ADMIN_URL);
+              appUrl.username = role;
+              appUrl.password = password;
+              appUrl.pathname = "/brandmyass";
+              if (!appUrl.searchParams.get("sslmode")) appUrl.searchParams.set("sslmode", "require");
+              process.stdout.write(appUrl.toString());
+            })().catch(e => { console.error(e.message); process.exit(1); });
+          ')
+          echo "::add-mask::$APP_DB_URL"
+          echo "APP_DB_URL=$APP_DB_URL" >> "$GITHUB_ENV"
+
+      - name: Hand the credentials to the App Service
+        env:
+          APP_NAME: ${{ vars.BRANDMYASS_APP_NAME || 'brandmyass-app' }}
+        run: |
+          set -euo pipefail
+          # Passed by variable, so no expanded secret appears in the echoed
+          # script source, and -o none stops az printing the settings back.
+          az webapp config appsettings set -g "$RG" -n "$APP_NAME" --settings \
+            "DATABASE_URL=$APP_DB_URL" \
+            "AZURE_STORAGE_CONNECTION_STRING=$STORAGE_CONN" \
+            "AZURE_STORAGE_CONTAINER=logos" -o none
+          echo "✓ wrote database and storage settings to ${APP_NAME}"
+
+          az webapp restart -g "$RG" -n "$APP_NAME" -o none
+          echo "✓ restarted ${APP_NAME}"
+
+      - name: Verify the running site can actually read the database
+        # The end-to-end check. /api/auction is the endpoint that queries
+        # Postgres, so a 200 carrying zones proves the App Service reached the
+        # server, authenticated as the new role, and had the privileges to read.
+        env:
+          APP_NAME: ${{ vars.BRANDMYASS_APP_NAME || 'brandmyass-app' }}
+        run: |
+          set -euo pipefail
+          URL="https://${APP_NAME}.azurewebsites.net/api/auction"
+          for i in $(seq 1 20); do
+            BODY=$(curl -s --max-time 20 "$URL" || true)
+            if echo "$BODY" | grep -q '"zones"'; then
+              echo "✓ the live site is reading the database"
+              echo "$BODY" | node -e '
+                let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
+                  const a=JSON.parse(s);
+                  console.log("closes:", a.closesAt);
+                  for (const z of a.zones) console.log(" ", z.zoneId.padEnd(15), "$"+z.minimumBidCents/100);
+                });'
+              exit 0
+            fi
+            echo "  attempt $i: not ready yet (restart + cold start), retrying in 15s"
+            sleep 15
+          done
+          echo "::error::${URL} never returned auction data. Check the App Service log stream."
+          exit 1
+
