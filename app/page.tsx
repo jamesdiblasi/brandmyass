@@ -60,7 +60,7 @@ export default async function Home() {
           <div className="max-w-4xl">
             <span className="pill border border-hairline bg-white text-muted">
               <span className="live-dot" aria-hidden />
-              Live auction — ten placements, one arse
+              Live auction — nine placements, one arse
             </span>
 
             <h1 className="mt-6 text-[52px] leading-[0.92] sm:text-[82px]">
@@ -70,7 +70,7 @@ export default async function Home() {
             </h1>
 
             <p className="lead mt-6 max-w-2xl">
-              Ten advertising placements on one backside, sold to the highest bidder and applied as a temporary
+              Nine advertising placements on one backside, sold to the highest bidder and applied as a temporary
               tattoo for six weeks. It is the most honest media buy in the country, because everybody can see
               exactly where your money went.
             </p>

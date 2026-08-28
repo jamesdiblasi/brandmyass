@@ -1,5 +1,5 @@
 /**
- * The inventory. Ten placements, laid out over a 600 × 740 SVG viewBox.
+ * The inventory. Nine placements, laid out over a 600 × 740 SVG viewBox.
  *
  * The body is built from FIVE overlapping shapes rather than one outline: a
  * torso, two cheek ellipses, and two thighs. The first attempt used a single
@@ -18,11 +18,13 @@
  *      than an organic one, and the grid does the same job here that a
  *      placement map does on any out-of-home rate card.
  *
- * Columns: left 84–268 | centre (ravine) 268–332 | right 332–516
+ * Columns: left 84–300 | right 300–516 — the two meet on the midline, so the
+ * 6-unit gutter between them falls exactly on the cleft and reads as the
+ * divider rather than as a gap.
  * Rows:    shelf 170–300 | flank 300–370 | prime 370–495 | sit 495–600 | thigh 600–720
  */
 
-export type ZoneTier = 'legendary' | 'prime' | 'standard' | 'bargain'
+export type ZoneTier = 'prime' | 'standard' | 'bargain'
 
 export interface Zone {
   /** Stable primary key. Never renumber these — bids reference them. */
@@ -78,7 +80,7 @@ export const ZONES: Zone[] = [
       'The widest single placement on the arse, and the only one that arrives with a cultural legacy attached. Sits exactly where a waistband gives up, which makes it the first thing visible every single time I bend over to plug in a monitor. Forty centimetres of uninterrupted lower back that has been sitting there since 2004 waiting for something to happen to it. Congratulations — you are what happens to it.',
     tier: 'prime',
     size: '40 × 14 cm',
-    reserveCents: 30_000,
+    reserveCents: 50_000,
     rect: { x: 108, y: 165, w: 384, h: 135 },
     anchor: { x: 300, y: 236 },
   },
@@ -91,8 +93,8 @@ export const ZONES: Zone[] = [
     tier: 'standard',
     size: '18 × 7 cm',
     reserveCents: 15_000,
-    rect: { x: 84, y: 300, w: 184, h: 70 },
-    anchor: { x: 176, y: 338 },
+    rect: { x: 84, y: 300, w: 216, h: 70 },
+    anchor: { x: 190, y: 338 },
   },
   {
     id: 'right-flank',
@@ -103,20 +105,8 @@ export const ZONES: Zone[] = [
     tier: 'standard',
     size: '18 × 7 cm',
     reserveCents: 15_000,
-    rect: { x: 332, y: 300, w: 184, h: 70 },
-    anchor: { x: 424, y: 338 },
-  },
-  {
-    id: 'the-ravine',
-    name: 'The Ravine',
-    pitch: 'The single most-looked-at, least-admitted-to placement in advertising.',
-    blurb:
-      'Let us not insult each other by pretending otherwise: this is the best inventory on the entire arse. It is dead centre, it is vertical, it is twenty-six centimetres tall, and every human being who sees it will look directly at it and then immediately claim they did not. No billboard on earth converts attention like the thing nobody will admit to looking at. Priced accordingly. Reserve is $666 and I will not be taking questions about that.',
-    tier: 'legendary',
-    size: '6 × 26 cm',
-    reserveCents: 66_600,
-    rect: { x: 268, y: 300, w: 64, h: 255 },
-    anchor: { x: 300, y: 412 },
+    rect: { x: 300, y: 300, w: 216, h: 70 },
+    anchor: { x: 410, y: 338 },
   },
   {
     id: 'left-prime',
@@ -127,8 +117,8 @@ export const ZONES: Zone[] = [
     tier: 'prime',
     size: '18 × 14 cm',
     reserveCents: 40_000,
-    rect: { x: 84, y: 370, w: 184, h: 125 },
-    anchor: { x: 172, y: 448 },
+    rect: { x: 84, y: 370, w: 216, h: 125 },
+    anchor: { x: 190, y: 448 },
   },
   {
     id: 'right-prime',
@@ -139,8 +129,8 @@ export const ZONES: Zone[] = [
     tier: 'prime',
     size: '18 × 14 cm',
     reserveCents: 40_000,
-    rect: { x: 332, y: 370, w: 184, h: 125 },
-    anchor: { x: 428, y: 448 },
+    rect: { x: 300, y: 370, w: 216, h: 125 },
+    anchor: { x: 410, y: 448 },
   },
   {
     id: 'left-sitbone',
@@ -151,8 +141,8 @@ export const ZONES: Zone[] = [
     tier: 'standard',
     size: '18 × 10 cm',
     reserveCents: 20_000,
-    rect: { x: 84, y: 495, w: 184, h: 105 },
-    anchor: { x: 176, y: 548 },
+    rect: { x: 84, y: 495, w: 216, h: 105 },
+    anchor: { x: 190, y: 548 },
   },
   {
     id: 'right-sitbone',
@@ -163,8 +153,8 @@ export const ZONES: Zone[] = [
     tier: 'standard',
     size: '18 × 10 cm',
     reserveCents: 20_000,
-    rect: { x: 332, y: 495, w: 184, h: 105 },
-    anchor: { x: 424, y: 548 },
+    rect: { x: 300, y: 495, w: 216, h: 105 },
+    anchor: { x: 410, y: 548 },
   },
   {
     id: 'left-under',
@@ -199,7 +189,6 @@ export function getZone(id: string): Zone | undefined {
 }
 
 export const TIER_LABEL: Record<ZoneTier, string> = {
-  legendary: 'Legendary',
   prime: 'Prime',
   standard: 'Standard',
   bargain: 'Bargain',
@@ -207,7 +196,6 @@ export const TIER_LABEL: Record<ZoneTier, string> = {
 
 /** Tier colours, used for the zone fills and the rate-card pills. */
 export const TIER_COLOR: Record<ZoneTier, string> = {
-  legendary: '#fdd900',
   prime: '#ff0084',
   standard: '#ff5a00',
   bargain: '#99948f',

@@ -10,7 +10,7 @@ const STEPS = [
   {
     n: '01',
     title: 'Pick a cheek',
-    body: 'Ten placements, priced by how many human beings will realistically see them. Some are premium. One is The Ravine, and we all know why that one costs what it costs.',
+    body: 'Nine placements, priced honestly by how many human beings will realistically see them. Some are prime real estate. One of them is, frankly, the underside of a thigh, and it is priced like it.',
   },
   {
     n: '02',
@@ -178,11 +178,7 @@ const FAQ = [
     'Your card hold is released automatically — usually within a minute — and you will receive an email letting you know. The email is, I will be honest, quite smug.',
   ],
   [
-    'Why is The Ravine $666?',
-    'Because $665 felt like cowardice.',
-  ],
-  [
-    'Can I buy all ten placements?',
+    'Can I buy all nine placements?',
     'You can, and I would very much like you to. You would become the sole sponsor of an entire human backside, which is a sentence no marketing department has ever put in a quarterly report.',
   ],
   [

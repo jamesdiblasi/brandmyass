@@ -209,9 +209,7 @@ export function AssPicker({ states, selectedId, onSelect }: Props) {
               >
                 {price}
               </text>
-              {/* The Ravine is 64 units wide and this label is not. Zones
-                  narrower than the label simply do without it. */}
-              {!state?.topBid && zone.rect.w >= 100 && (
+              {!state?.topBid && (
                 <text
                   x={zone.anchor.x}
                   y={zone.anchor.y + 31}
@@ -234,7 +232,7 @@ export function AssPicker({ states, selectedId, onSelect }: Props) {
       </svg>
 
       <p className="mt-2 text-center text-[13px] text-muted">
-        Tap a placement. Yes, all of them are real. Yes, including that one.
+        Tap a placement. Yes, all of them are real. Yes, I have thought about this.
       </p>
     </div>
   )

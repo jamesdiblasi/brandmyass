@@ -241,7 +241,7 @@ export interface CreatedBid {
  * A pending bid deliberately does NOT become the standing bid. It is only a
  * claim to have started paying. Promotion happens in `activateBid`, once
  * Stripe confirms the money is actually reachable — otherwise anybody could
- * take The Ravine off the market for free by typing a big number.
+ * take a placement off the market for free by typing a big number.
  */
 export async function createBid(input: CreateBidInput): Promise<CreatedBid> {
   const zone = ZONES_BY_ID.get(input.zoneId)

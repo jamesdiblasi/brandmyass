@@ -23,7 +23,9 @@ interface BoardData extends AuctionState {
 
 export function AuctionBoard({ initial }: { initial: BoardData }) {
   const [data, setData] = useState<BoardData>(initial)
-  const [selectedId, setSelectedId] = useState<string>(ZONES[4].id) // Left Prime Cheek
+  // Selected by id, not index. This was ZONES[4], which silently pointed at a
+  // different cheek the moment a zone earlier in the list was removed.
+  const [selectedId, setSelectedId] = useState<string>(getZone('left-prime')?.id ?? ZONES[0].id)
   const [stale, setStale] = useState(false)
 
   const refresh = useCallback(async () => {

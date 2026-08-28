@@ -39,6 +39,7 @@ async function main(): Promise<void> {
   assertSafeIdentifier(DB_NAME, 'BMA_DB_NAME')
   if (ROLE) assertSafeIdentifier(ROLE, 'BMA_DB_ROLE')
 
+  let roleExists = true
   const client = new Client({ connectionString: adminUrl, ssl: { rejectUnauthorized: true } })
   await client.connect()
 
@@ -52,8 +53,17 @@ async function main(): Promise<void> {
     }
 
     if (ROLE) {
-      await client.query(`grant connect on database ${DB_NAME} to ${ROLE}`)
-      console.log(`✓ granted CONNECT on "${DB_NAME}" to "${ROLE}"`)
+      // A role named in config but absent from the server would otherwise abort
+      // the whole run after the database had already been created, leaving a
+      // half-done job that reads like a failure. Warn and carry on instead.
+      const { rows: roleRows } = await client.query('select 1 from pg_roles where rolname = $1', [ROLE])
+      if (roleRows.length === 0) {
+        console.warn(`! role "${ROLE}" does not exist on this server — skipping grants`)
+        roleExists = false
+      } else {
+        await client.query(`grant connect on database ${DB_NAME} to ${ROLE}`)
+        console.log(`✓ granted CONNECT on "${DB_NAME}" to "${ROLE}"`)
+      }
     }
   } catch (err) {
     const code = (err as { code?: string }).code
@@ -66,7 +76,7 @@ async function main(): Promise<void> {
     await client.end()
   }
 
-  if (ROLE) {
+  if (ROLE && roleExists) {
     // Schema-level grants have to be issued while connected to the new database.
     const inner = new Client({
       connectionString: adminUrl.replace(/\/[^/?]+(\?|$)/, `/${DB_NAME}$1`),

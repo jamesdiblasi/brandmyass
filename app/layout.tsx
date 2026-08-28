@@ -19,11 +19,11 @@ export const metadata: Metadata = {
     template: `%s — ${SITE.name}`,
   },
   description:
-    'Ten advertising placements. One backside. Bid on a cheek, win it, and I temp-tattoo your logo onto the exact square centimetre you paid for.',
+    'Nine advertising placements. One backside. Bid on a cheek, win it, and I temp-tattoo your logo onto the exact square centimetre you paid for.',
   openGraph: {
     title: `${SITE.name} — ${SITE.tagline}`,
     description:
-      'Live auction for ten temporary-tattoo advertising placements on one man. Get outbid and your card hold vanishes.',
+      'Live auction for nine temporary-tattoo advertising placements on one man. Get outbid and your card hold vanishes.',
     type: 'website',
     url: SITE.baseUrl,
   },

@@ -2,7 +2,7 @@
 
 Premium out-of-home advertising. On my arse.
 
-Ten placements on one backside, sold by live auction, applied as temporary
+Nine placements on one backside, sold by live auction, applied as temporary
 tattoos for six weeks. Bidding takes a card **hold**, not a charge — get outbid
 and it disappears.
 
@@ -21,8 +21,8 @@ and it disappears.
 
 ## The auction rules
 
-- Every zone has its **own clock**. A bidding war over The Ravine does not hold
-  the undercarriages open.
+- Every zone has its **own clock**. A bidding war over a prime cheek does not
+  hold the undercarriages open.
 - **Minimum increment $10.** No proxy bidding, no hidden reserve. Everything is
   on the board.
 - **20% card hold**, authorised not captured. Outbid releases it automatically.
@@ -44,7 +44,7 @@ group (Australia Southeast), on the same App Service Plan as the dashboard —
 an extra app on a plan already paid for costs nothing.
 
 It is currently serving the **offline board**: full copy, working placement
-map, all ten reserve prices, but no bidding, because `DATABASE_URL` is not set
+map, all nine reserve prices, but no bidding, because `DATABASE_URL` is not set
 on the App Service. That is the designed fallback, not a broken deploy.
 
 ### Making it take real money
@@ -53,15 +53,22 @@ Add these as repository secrets, then push (or re-run the workflow):
 
 | Secret | Used for |
 | --- | --- |
-| `BMA_DATABASE_URL` | app role against the brandmyass database |
+| `BMA_DATABASE_URL` | the **`brandmyass_app`** role against the brandmyass database — never `leadnet_app`, and never the admin role (see below) |
 | `BMA_STRIPE_SECRET_KEY` | server-side Stripe |
 | `BMA_STRIPE_PUBLISHABLE_KEY` | **build-time** — inlined into the client bundle |
 | `BMA_STRIPE_WEBHOOK_SECRET` | webhook signature verification |
 
 Then, separately:
 
-1. `npm run db:setup` from this directory, with admin credentials, to create
-   the database on `optello-pg`.
+1. Run the **Create the Brand My Ass database** workflow (or `npm run db:setup`
+   locally with admin credentials). Set a `BMA_DB_PASSWORD` secret first so it
+   creates the dedicated `brandmyass_app` role.
+
+   This matters more than it looks. `brandmyass-app` shares an App Service Plan
+   with the dashboard, so it shares the dashboard's **outbound IP** and is
+   already inside the Postgres server's IP firewall. The firewall is not a
+   boundary between the two apps — the database role is. A public site taking
+   card details must not hold a credential that can read `optello`.
 2. Add a firewall rule on the Postgres server admitting the App Service's
    outbound addresses — the dashboard's `deploy.yml` documents hitting exactly
    this problem with GitHub runners.

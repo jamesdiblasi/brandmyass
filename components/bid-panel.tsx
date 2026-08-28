@@ -37,7 +37,7 @@ export function BidPanel({ zone, state, onBidPlaced }: Props) {
   const [busy, setBusy] = useState(false)
 
   // Changing zones must reset everything — otherwise a half-finished bid on the
-  // Ravine follows you to the undercarriage.
+  // left cheek follows you to the undercarriage.
   useEffect(() => {
     setPhase('form')
     setClientSecret(null)

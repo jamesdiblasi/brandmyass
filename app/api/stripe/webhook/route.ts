@@ -16,7 +16,7 @@ export const runtime = 'nodejs'
  * amount_capturable_updated` is Stripe's way of saying "the funds are held and
  * capturable" for a manual-capture intent, and that — not the browser
  * reporting success — is what promotes a bid. Trusting the client here would
- * let anyone take The Ravine off the market for free.
+ * let anyone take a placement off the market for free.
  */
 export async function POST(req: Request) {
   const signature = req.headers.get('stripe-signature')
