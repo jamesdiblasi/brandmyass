@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+  }
+
+  /* Designjoy sets heading weight to 500 — not 700 — and then claws the
+     tracking in hard. At 82px it runs -3px, which is roughly -0.037em, so the
+     ratio is expressed in em here to survive the responsive size ramp. */
+  h1, h2, h3 { font-weight: 500; letter-spacing: -0.037em; line-height: .96; }
+  h4, h5, h6 { font-weight: 500; letter-spacing: -0.02em; }
+
+  ::selection { background: #ff0084; color: #fff; }
+
+  :focus-visible {
+    outline: 3px solid #ff5a00;
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  .container-dj {
+    @apply mx-auto w-full max-w-container px-5 sm:px-6;
+  }
+
+  .section {
+    @apply py-16 sm:py-24;
+  }
+
+  /* --- Buttons, straight off Designjoy ------------------------------------ */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-btn px-4 py-2
+           text-[15px] font-medium no-underline transition-all duration-200;
+  }
+  .btn-filled {
+    @apply btn text-white border border-ink shadow-btn;
+    background-image: linear-gradient(#444, #000);
+  }
+  .btn-filled:hover { @apply shadow-btn-hover; }
+  .btn-filled:disabled {
+    @apply cursor-not-allowed opacity-40 shadow-none;
+    background-image: linear-gradient(#8a8a8a, #6b6b6b);
+  }
+  .btn-outline {
+    @apply btn border border-hairline text-ink;
+  }
+  .btn-outline:hover { @apply bg-white border-white; }
+
+  .btn-flame {
+    @apply btn text-white border border-flame shadow-btn;
+    background-image: linear-gradient(#ff7a2e, #ff5a00);
+  }
+  .btn-flame:hover { @apply shadow-btn-hover; }
+
+  .btn-lg { @apply text-lg px-6 py-3.5; }
+
+  /* --- Surfaces ----------------------------------------------------------- */
+  .card-dj {
+    @apply rounded-card bg-card border border-hairline2/70 shadow-card;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-pill px-3 py-1
+           text-[13px] font-medium leading-5;
+  }
+
+  .hairline { @apply border-hairline2/70; }
+
+  /* Small-caps eyebrow used above section headings. */
+  .eyebrow {
+    @apply text-[13px] font-semibold uppercase tracking-[0.14em] text-muted;
+  }
+
+  .lead {
+    @apply text-muted text-lg sm:text-xl leading-[1.35];
+  }
+}
+
+/* The live-auction dot. Two elements: a solid core and an expanding ring. */
+.live-dot { position: relative; display: inline-block; width: 8px; height: 8px; }
+.live-dot::before,
+.live-dot::after {
+  content: ''; position: absolute; inset: 0;
+  border-radius: 9999px; background: #ff5a00;
+}
+.live-dot::after { animation: pulseRing 2s cubic-bezier(.4,0,.6,1) infinite; }
+@keyframes pulseRing {
+  0%   { transform: scale(.9); opacity: .7; }
+  70%  { transform: scale(2.4); opacity: 0; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}
