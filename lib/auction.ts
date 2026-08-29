@@ -482,24 +482,6 @@ export async function settleClosedZones(): Promise<SettlementRow[]> {
   })
 }
 
-/** Recent activity for the live ticker. */
-export async function getRecentBids(limit = 12) {
-  return query<{
-    zone_id: string
-    amount_cents: number
-    sponsor_name: string
-    created_at: Date
-    status: string
-  }>(
-    `select zone_id, amount_cents, sponsor_name, created_at, status
-     from bids
-     where status in ('active','outbid','won','lost')
-     order by created_at desc
-     limit $1`,
-    [limit],
-  )
-}
-
 export interface SponsorHistoryEntry {
   zoneId: string
   sponsorName: string

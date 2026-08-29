@@ -1,0 +1,109 @@
+name: Reset the campaign (wipes bids — read before pushing this file)
+
+# Puts the auction back to factory state: DELETES every bid, restores the Left
+# Undercarriage reserve to $125, and restarts a fresh 21-day clock on every
+# zone and the campaign itself. Built for wiping the live end-to-end test.
+#
+# THE DELETE IS REAL. Bids here included a genuinely paid Stripe charge; the
+# row goes, the payment record in Stripe stays (refund it in the Stripe
+# Dashboard or keep the dollar — the database is not the ledger of record for
+# money, Stripe is). Clearing bids is also what removes the logo from the
+# cheek, the marquee, the history ledger, and the raised total in one move —
+# all of them render from these rows.
+#
+# Same access pattern as the reserve tweak this file replaces: the app's own
+# DATABASE_URL read from App Service settings via OIDC, masked immediately,
+# never a full settings listing. Triggered by pushes to THIS FILE only, so
+# editing it is the rerun mechanism and deleting it can never fire it.
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/reset-campaign.yml']
+
+env:
+  CAMPAIGN_DAYS: '21'
+  RESTORE_RESERVES: '{"left-under": 12500}'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_0292952CA31E4A859736AADD13AFCB8C }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_D13A372D156143B69FD197774F6DFFC9 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_326C520A827942A1AB6F020F21FFEFE0 }}
+
+      - name: Reset
+        run: |
+          set -euo pipefail
+          DB_URL=$(az webapp config appsettings list -g leadgen -n brandmyass-app \
+                     --query "[?name=='DATABASE_URL'].value | [0]" -o tsv)
+          if [ -z "$DB_URL" ] || [ "$DB_URL" = "None" ]; then
+            echo "::error::Could not read DATABASE_URL from the App Service."
+            exit 1
+          fi
+          echo "::add-mask::$DB_URL"
+          export DATABASE_URL="$DB_URL"
+
+          node -e '
+            const { Client } = require("pg");
+            (async () => {
+              const days = Number(process.env.CAMPAIGN_DAYS);
+              const reserves = JSON.parse(process.env.RESTORE_RESERVES);
+              if (!Number.isSafeInteger(days) || days <= 0) throw new Error("bad CAMPAIGN_DAYS");
+
+              const c = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: true } });
+              await c.connect();
+              await c.query("begin");
+
+              const gone = await c.query("delete from bids returning id");
+              console.log(`deleted ${gone.rowCount} bid(s)`);
+
+              for (const [zone, cents] of Object.entries(reserves)) {
+                if (!/^[a-z-]+$/.test(zone) || !Number.isSafeInteger(cents) || cents <= 0) throw new Error("bad reserve entry");
+                const r = await c.query(
+                  "update zone_state set reserve_cents = $2, updated_at = now() where zone_id = $1 returning zone_id",
+                  [zone, cents],
+                );
+                console.log(`reserve restored: ${zone} -> ${cents} (${r.rowCount} row)`);
+              }
+
+              const close = await c.query(
+                `update auction
+                 set opens_at = now(), closes_at = now() + make_interval(days => $1), settled_at = null
+                 where id = 1
+                 returning closes_at`,
+                [days],
+              );
+              await c.query(
+                "update zone_state set closes_at = $1, extensions = 0, settled = false, updated_at = now()",
+                [close.rows[0].closes_at],
+              );
+
+              await c.query("commit");
+              console.log("campaign restarted, closes:", close.rows[0].closes_at.toISOString());
+
+              const board = await c.query("select zone_id, reserve_cents from zone_state order by reserve_cents desc");
+              for (const row of board.rows) console.log(` ${String(row.reserve_cents).padStart(6)}  ${row.zone_id}`);
+              const raised = await c.query("select count(*)::int as n from bids");
+              console.log(`bids remaining: ${raised.rows[0].n} (raised is now $0)`);
+              await c.end();
+            })().catch((e) => { console.error(e.message); process.exit(1); });
+          '

@@ -10,16 +10,7 @@ import { AssPicker } from './ass-picker'
 import { BidPanel } from './bid-panel'
 import { Countdown } from './countdown'
 
-interface RecentBid {
-  zoneId: string
-  amountCents: number
-  sponsorName: string
-  status: string
-  at: string
-}
-
 interface BoardData extends AuctionState {
-  recent?: RecentBid[]
   history?: SponsorHistoryEntry[]
 }
 
@@ -263,27 +254,6 @@ export function AuctionBoard({ initial }: { initial: BoardData }) {
         </div>
       </div>
 
-      {/* --- activity ticker ------------------------------------------------ */}
-      {data.recent && data.recent.length > 0 && (
-        <div className="card-dj mt-8 p-5">
-          <h3 className="text-[20px]">Recent shame</h3>
-          <ul className="mt-3 divide-y divide-hairline2/60">
-            {data.recent.map((bid, i) => (
-              <li key={`${bid.at}-${i}`} className="flex flex-wrap items-baseline gap-x-2 py-2 text-[14px]">
-                <span className="font-semibold">{bid.sponsorName}</span>
-                <span className="text-muted">bid</span>
-                <span className="font-semibold">{formatMoney(bid.amountCents)}</span>
-                <span className="text-muted">on</span>
-                <span className="font-medium">{getZone(bid.zoneId)?.name ?? bid.zoneId}</span>
-                {bid.status === 'outbid' && (
-                  <span className="pill bg-canvas text-muted">outbid, tattoo removed</span>
-                )}
-                {bid.status === 'won' && <span className="pill bg-gold text-ink">WON</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   )
 }
