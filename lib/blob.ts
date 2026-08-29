@@ -55,6 +55,37 @@ export function isBlobConfigured(): boolean {
 }
 
 /**
+ * Is this URL one of OUR blobs?
+ *
+ * The bid endpoint accepts a logo_url and the board renders it to every
+ * visitor once the bid pays. Uploads through /api/logo are magic-byte checked
+ * and land in our container — but nothing forced a hand-crafted bid request to
+ * have gone through the upload at all. It could name any host, and for the
+ * price of a bid put an arbitrary remote image (or a tracking pixel) in front
+ * of everyone. So the origin is pinned: scheme, our account host, our
+ * container path, nothing else.
+ */
+export function isOurLogoUrl(url: string): boolean {
+  if (!isBlobConfigured()) return false
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  try {
+    const account = client().accountName
+    return (
+      parsed.protocol === 'https:' &&
+      parsed.hostname === `${account}.blob.core.windows.net` &&
+      parsed.pathname.startsWith(`/${CONTAINER}/`)
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
  * Uploads a validated logo and returns its public URL.
  *
  * The blob name is a random UUID, not the uploaded filename: filenames are

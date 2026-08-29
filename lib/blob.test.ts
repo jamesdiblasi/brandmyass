@@ -38,3 +38,14 @@ describe('sniffImage', () => {
     expect(() => sniffImage(Buffer.from([0x89, 0x50]))).toThrow(LogoError)
   })
 })
+
+describe('isOurLogoUrl', () => {
+  it('refuses everything when storage is not configured', async () => {
+    // In this test environment there is no connection string, so the answer is
+    // no for any URL — the bid route then rejects rather than trusts.
+    const { isOurLogoUrl } = await import('./blob')
+    expect(isOurLogoUrl('https://evil.example/pixel.png')).toBe(false)
+    expect(isOurLogoUrl('https://someaccount.blob.core.windows.net/logos/x.png')).toBe(false)
+    expect(isOurLogoUrl('not a url')).toBe(false)
+  })
+})

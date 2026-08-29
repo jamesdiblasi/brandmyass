@@ -4,6 +4,7 @@ import { chargeBid } from '@/lib/stripe'
 import { query } from '@/lib/db'
 import { getZone } from '@/lib/zones'
 import { formatMoney } from '@/lib/money'
+import { isOurLogoUrl } from '@/lib/blob'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +60,14 @@ export async function POST(req: Request) {
 
   const zone = getZone(zoneId)
   if (!zone) return NextResponse.json({ error: 'No such placement.' }, { status: 400 })
+
+  // A logo must be one of OUR blobs — i.e. it went through /api/logo and its
+  // magic-byte check. Accepting any URL here would let a hand-crafted bid put
+  // an arbitrary remote image in front of every visitor for the price of the
+  // bid, sidestepping the upload validation entirely.
+  if (logoUrl && !isOurLogoUrl(logoUrl)) {
+    return NextResponse.json({ error: 'Logos have to be uploaded here, not linked from elsewhere.' }, { status: 400 })
+  }
 
   let bid
   try {
