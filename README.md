@@ -201,9 +201,11 @@ forgetting to run it costs nobody anything.
 One. GitHub secrets are write-only, so nothing here asks you to copy a value
 out of another repo — that is impossible by design.
 
-| Name | Where to get it |
-| --- | --- |
-| `AZURE_WEBAPP_PUBLISH_PROFILE` | Azure Portal → **brandmyass-app** → Overview → *Download publish profile* → paste the whole file. Scoped to this one web app. If the button is greyed out: Configuration → General settings → *SCM Basic Auth Publishing* → On. |
+None to create by hand. Connecting the Azure **Deployment Center** to this
+repo auto-created the three `AZUREAPPSERVICE_*` OIDC secrets that
+`deploy.yml` logs in with. (The workflow the Deployment Center generated is
+deleted — it deployed the repo root instead of `.next/standalone`; this
+repo's own workflow uses its credentials with the correct build.)
 
 Runtime settings do not flow through GitHub at all. `DATABASE_URL` and the
 storage connection are already on the App Service; the Stripe keys go straight

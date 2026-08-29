@@ -1,22 +1,17 @@
 name: Deploy Brand My Ass to Azure App Service
 
-# Deploys to the existing brandmyass-app App Service using a PUBLISH PROFILE —
-# a credential downloaded from the Azure Portal that can deploy to this one web
-# app and do nothing else in the subscription.
+# Deploys to the existing brandmyass-app App Service with the OIDC federated
+# credential that Azure's Deployment Center created when it was pointed at this
+# repo. Setting that up also wrote the three AZUREAPPSERVICE_* secrets below
+# into the repo automatically — which is why no human ever has to copy a
+# credential anywhere for this workflow to run.
 #
-# Why not azure/login with AZURE_CREDENTIALS, like the parent repo: that secret
-# is a subscription-scoped service principal, GitHub secrets are write-only, and
-# the person setting this repo up could not read the value out of the old repo
-# to copy it across. A publish profile is self-service (one download, one
-# paste), far narrower, and everything the old login powered — resource-group
-# discovery, creating the web app, applying settings — is one-time provisioning
-# that has already happened.
-#
-# ONE repository secret:
-#   * AZURE_WEBAPP_PUBLISH_PROFILE — Azure Portal → brandmyass-app → Overview →
-#     "Download publish profile"; paste the FILE'S ENTIRE CONTENTS (it is XML).
-#     If the download button is greyed out: Configuration → General settings →
-#     SCM Basic Auth Publishing → On, then retry.
+# The Deployment Center ALSO generated its own workflow, and that one is
+# deleted on purpose. It deployed the wrong thing: `package: .` ships the repo
+# root, but this app's deployable artifact is .next/standalone (the App
+# Service's startup command is `node server.js`, which only exists there), and
+# its build step had no publishable key, so its bundle had no card form. This
+# workflow keeps the Deployment Center's credentials and this repo's build.
 #
 # Runtime configuration does NOT flow through this repo. DATABASE_URL and the
 # storage connection were provisioned onto the App Service by the old infra
@@ -49,17 +44,12 @@ jobs:
     runs-on: ubuntu-latest
     name: Build and deploy
 
+    permissions:
+      id-token: write   # the OIDC login exchanges a GitHub token for Azure access
+      contents: read
+
     steps:
       - uses: actions/checkout@v4
-
-      - name: Check the publish profile is present
-        env:
-          PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        run: |
-          if [ -z "$PROFILE" ]; then
-            echo "::error::AZURE_WEBAPP_PUBLISH_PROFILE is not set. Azure Portal → ${APP_NAME} → Overview → 'Download publish profile', then paste the file's contents as a repository secret of that name."
-            exit 1
-          fi
 
       - uses: actions/setup-node@v4
         with:
@@ -76,16 +66,30 @@ jobs:
         env:
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ vars.BMA_STRIPE_PUBLISHABLE_KEY || 'pk_live_51U9YEWAuZlGu5qZOeMg02FkrZoPI27dqrYDI64jh5MoySc8XGrio7T6luRaPED7DFVm3cTjmsHVwSM2zs1sNZbMv00rbn2jV8T' }}
 
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_0292952CA31E4A859736AADD13AFCB8C }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_D13A372D156143B69FD197774F6DFFC9 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_326C520A827942A1AB6F020F21FFEFE0 }}
+
+      - name: Make sure the startup command survived the Deployment Center
+        # Connecting the Deployment Center can rewrite an app's startup
+        # configuration. The standalone artifact only works as `node server.js`,
+        # so it is reasserted on every deploy. Non-fatal: if this credential
+        # lacks config rights the smoke test below still catches a wrong value.
+        run: |
+          az webapp config set -g leadgen -n "$APP_NAME" --startup-file "node server.js" -o none \
+            || echo "::warning::could not (re)set the startup command; if the smoke test fails, set it in the Portal: General settings → Startup Command → node server.js"
+
       - name: Deploy
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.APP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          slot-name: 'Production'
           # The standalone folder is the entire deployable app: server.js, the
           # traced node_modules, and the .next/static + public that the build
-          # script copies in (Next does not do that itself). The App Service's
-          # startup command, `node server.js`, was set at provisioning time and
-          # persists.
+          # script copies in (Next does not do that itself).
           package: .next/standalone
 
       - name: Smoke test
