@@ -110,7 +110,7 @@ export function Numbers() {
 /* ========================================================================== */
 
 const FAQ = [
-  ['Is this real?', 'Distressingly. There is a database, a payment processor and a man with a printer full of temporary tattoo paper.'],
+  ['Is this real?', 'Disturbingly so. The internet is full of idiots, I’ve built consultancies, so now the next step is to brand my ass…'],
   [
     'Is it a permanent tattoo?',
     'No. Temporary, and two weeks is the ceiling — less if somebody outbids you first. The lasting part is this website, which stays up for a year with your logo sitting on the placement you paid for.',
