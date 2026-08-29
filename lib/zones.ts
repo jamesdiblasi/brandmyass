@@ -159,12 +159,12 @@ export const ZONES: Zone[] = [
   {
     id: 'left-under',
     name: 'Left Undercarriage',
-    pitch: 'Cheap, and cheap for a very obvious reason.',
+    pitch: 'One dollar. I am not even pretending this one has reach.',
     blurb:
       'Below the curve, on the top of the thigh. Visibility is genuinely poor unless I am doing something undignified, which — statistically, even over a two-week campaign — I will be. Our most affordable inventory. Perfect for a startup with more nerve than budget.',
     tier: 'bargain',
     size: '20 × 11 cm',
-    reserveCents: 12_500,
+    reserveCents: 100,
     rect: { x: 110, y: 600, w: 186, h: 120 },
     anchor: { x: 205, y: 658 },
   },
