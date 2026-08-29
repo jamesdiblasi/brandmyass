@@ -103,8 +103,14 @@ jobs:
             CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$URL" || echo 000)
             if [ "$CODE" = "200" ]; then
               echo "✓ ${URL} returned 200"
+              # Booleans only — the endpoint is designed to be safe to print.
+              HEALTH=$(curl -s --max-time 20 "${URL}/api/health" || echo '{}')
+              echo "health: $HEALTH"
               echo "### Brand My Ass is live" >> "$GITHUB_STEP_SUMMARY"
               echo "$URL" >> "$GITHUB_STEP_SUMMARY"
+              echo '```json' >> "$GITHUB_STEP_SUMMARY"
+              echo "$HEALTH" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
             echo "  attempt $i: HTTP $CODE — cold start, retrying in 15s"
