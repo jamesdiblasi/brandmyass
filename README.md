@@ -102,7 +102,9 @@ refund permission exists in this codebase or on the server.
 
 ## Live
 
-https://brandmyass-app.azurewebsites.net
+https://brandmyass.site (canonical — PUBLIC_BASE_URL on the App Service; the
+share-card and Stripe return URLs ride it). The App Service's own hostname,
+https://brandmyass-app.azurewebsites.net, still serves too.
 
 Deployed by `.github/workflows/deploy-brandmyass.yml` on every push to the
 feature branch that touches `brandmyass/`. It runs in the `leadgen` resource
