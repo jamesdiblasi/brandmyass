@@ -1,0 +1,121 @@
+# One-off: bind brandmyass.site (and www) to the App Service, with certs.
+#
+# Triggers only on pushes to THIS FILE — editing it is the rerun mechanism,
+# because this session cannot dispatch workflows. It is written to converge
+# over two runs:
+#
+#   Run 1 (DNS not yet set): binding steps warn and skip, but the first step
+#   prints the app's inbound IP and customDomainVerificationId — the two
+#   values the DNS records need. (The verification id is not a secret; its
+#   whole purpose is to be published in a public TXT record.)
+#
+#   Run 2 (after DNS): hostnames bind, managed certificates issue, HTTPS is
+#   verified, and only then does PUBLIC_BASE_URL switch to the custom domain —
+#   Stripe return URLs ride that setting, so it must not point at a hostname
+#   that does not serve yet.
+#
+# Every step is idempotent: already-bound hostnames and existing certificates
+# are detected and skipped, so re-running is always safe.
+name: Bind brandmyass.site to the app (one-off; edit this file to re-run)
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/bind-domain.yml']
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: bind-domain
+  cancel-in-progress: false
+
+env:
+  APP_NAME: brandmyass-app
+  RESOURCE_GROUP: leadgen
+  APEX: brandmyass.site
+
+jobs:
+  bind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_0292952CA31E4A859736AADD13AFCB8C }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_D13A372D156143B69FD197774F6DFFC9 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_326C520A827942A1AB6F020F21FFEFE0 }}
+
+      - name: What the DNS records must contain
+        run: |
+          set -euo pipefail
+          IP=$(az webapp show -g "$RESOURCE_GROUP" -n "$APP_NAME" --query inboundIpAddress -o tsv)
+          VID=$(az webapp show -g "$RESOURCE_GROUP" -n "$APP_NAME" --query customDomainVerificationId -o tsv)
+          echo "inbound IP (A @):        $IP"
+          echo "verification id (TXT asuid): $VID"
+          {
+            echo "### DNS targets for ${APEX}"
+            echo '```'
+            echo "A     @         -> $IP"
+            echo "CNAME www       -> ${APP_NAME}.azurewebsites.net"
+            echo "TXT   asuid     -> $VID"
+            echo "TXT   asuid.www -> $VID"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Bind hostnames
+        run: |
+          set -uo pipefail
+          for H in "$APEX" "www.$APEX"; do
+            if az webapp config hostname list --webapp-name "$APP_NAME" -g "$RESOURCE_GROUP" --query "[?name=='$H']" -o tsv | grep -q .; then
+              echo "already bound: $H"
+            elif az webapp config hostname add --webapp-name "$APP_NAME" -g "$RESOURCE_GROUP" --hostname "$H" -o none; then
+              echo "bound: $H"
+            else
+              echo "::warning::could not bind $H — DNS not set or not propagated yet; set the records above and re-run"
+            fi
+          done
+
+      - name: Managed certificates + HTTPS bindings
+        run: |
+          set -uo pipefail
+          for H in "$APEX" "www.$APEX"; do
+            if ! az webapp config hostname list --webapp-name "$APP_NAME" -g "$RESOURCE_GROUP" --query "[?name=='$H']" -o tsv | grep -q .; then
+              echo "skipping cert for $H (hostname not bound)"
+              continue
+            fi
+            THUMB=$(az webapp config ssl list -g "$RESOURCE_GROUP" --query "[?subjectName=='$H'].thumbprint | [0]" -o tsv)
+            if [ -z "$THUMB" ]; then
+              THUMB=$(az webapp config ssl create -g "$RESOURCE_GROUP" -n "$APP_NAME" --hostname "$H" --query thumbprint -o tsv || true)
+            fi
+            if [ -n "${THUMB:-}" ]; then
+              if az webapp config ssl bind -g "$RESOURCE_GROUP" -n "$APP_NAME" --certificate-thumbprint "$THUMB" --ssl-type SNI -o none; then
+                echo "https bound: $H"
+              else
+                echo "::warning::certificate exists but binding failed for $H"
+              fi
+            else
+              echo "::warning::no managed certificate for $H yet (issuance can lag DNS; re-run)"
+            fi
+          done
+
+      - name: Verify HTTPS, then make the domain canonical
+        # PUBLIC_BASE_URL feeds Stripe return URLs and the share-card URLs, so
+        # it only flips once the domain actually serves over HTTPS.
+        run: |
+          set -uo pipefail
+          for i in $(seq 1 12); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://$APEX" || echo 000)
+            if [ "$CODE" = "200" ]; then
+              echo "✓ https://$APEX returned 200"
+              az webapp config appsettings set -g "$RESOURCE_GROUP" -n "$APP_NAME" \
+                --settings PUBLIC_BASE_URL="https://$APEX" -o none
+              echo "PUBLIC_BASE_URL -> https://$APEX (app restarts itself on the setting change)"
+              echo "### https://$APEX is live and canonical" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "  attempt $i: HTTP $CODE — waiting 10s (DNS/cert still settling)"
+            sleep 10
+          done
+          echo "::warning::https://$APEX not serving yet — DNS or certificate still propagating; re-run this workflow"
