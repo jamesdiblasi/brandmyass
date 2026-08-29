@@ -106,6 +106,9 @@ jobs:
               # Booleans only — the endpoint is designed to be safe to print.
               HEALTH=$(curl -s --max-time 20 "${URL}/api/health" || echo '{}')
               echo "health: $HEALTH"
+              # Share-card check: the image URLs must be absolute and point at
+              # this host, or a link pasted on X unfurls nothing.
+              curl -s --max-time 20 "$URL" | grep -o '<meta[^>]*\(og:image\|twitter:image\|twitter:card\)[^>]*>' || echo "::warning::no share-card meta tags found on /"
               echo "### Brand My Ass is live" >> "$GITHUB_STEP_SUMMARY"
               echo "$URL" >> "$GITHUB_STEP_SUMMARY"
               echo '```json' >> "$GITHUB_STEP_SUMMARY"

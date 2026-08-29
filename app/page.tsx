@@ -74,9 +74,10 @@ export default async function Home() {
             </h1>
 
             <p className="lead mt-6 max-w-2xl">
-              Nine advertising placements on one backside, sold to the highest bidder and applied as a
-              temporary tattoo for two weeks. If you’re outbid, your tattoo is removed, and replaced with my new
-              owner.
+              Ever heard the term “Sell your ass”, well — in today’s internet craze, I’m going to do
+              exactly that, sell the real estate of my ass to the highest bidders. Nine advertisement
+              placements, sold to the highest bidder, and applied as a tattoo for two weeks. If you’re
+              outbid, your tattoo is removed, and replaced with my new owner.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">

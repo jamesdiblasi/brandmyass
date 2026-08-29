@@ -20,14 +20,24 @@ export const metadata: Metadata = {
   },
   description:
     'Nine advertising placements. One backside. Pay for a cheek and I temp-tattoo your logo onto the exact square centimetre you paid for — until somebody pays more.',
+  // The share card images live next to this file as opengraph-image.png and
+  // twitter-image.png — Next's file convention attaches them (absolute URLs
+  // via metadataBase) so a link pasted on X unfurls the beach.
   openGraph: {
-    title: `${SITE.name} — ${SITE.tagline}`,
+    title: 'Brand My Ass — I’m selling ad space on my ass',
     description:
-      'Live auction for nine temporary-tattoo advertising placements on one man. Pay and your logo goes on for up to two weeks. Get outbid and it comes off. The site stays up for a year.',
+      'Nine advertisement placements on one ass, sold at live auction and temp-tattooed on for two weeks. Get outbid and your logo comes off. Bidding is open now.',
     type: 'website',
     url: SITE.baseUrl,
+    siteName: SITE.name,
   },
-  twitter: { card: 'summary_large_image' },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Brand My Ass — I’m selling ad space on my ass',
+    description:
+      'Nine advertisement placements on one ass, sold at live auction and temp-tattooed on for two weeks. Get outbid and your logo comes off. Bidding is open now.',
+    creator: '@thatjsd',
+  },
   robots: { index: true, follow: true },
 }
 

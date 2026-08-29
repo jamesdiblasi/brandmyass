@@ -40,7 +40,13 @@ export const SITE = {
   name: 'Brand My Ass',
   domain: 'brandmyass.site',
   tagline: 'Premium out-of-home advertising. On my ass.',
-  /** Where Stripe sends people back to. Set PUBLIC_BASE_URL in production. */
-  baseUrl: process.env.PUBLIC_BASE_URL || 'http://localhost:3002',
+  /**
+   * Where Stripe sends people back to, and the base for absolute social-card
+   * URLs. PUBLIC_BASE_URL wins; WEBSITE_HOSTNAME is set by App Service itself,
+   * so production never falls back to localhost.
+   */
+  baseUrl:
+    process.env.PUBLIC_BASE_URL ||
+    (process.env.WEBSITE_HOSTNAME ? `https://${process.env.WEBSITE_HOSTNAME}` : 'http://localhost:3002'),
   contactEmail: 'pimp@brandmyass.site',
 }
