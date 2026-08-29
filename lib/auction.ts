@@ -485,3 +485,50 @@ export async function getRecentBids(limit = 12) {
     [limit],
   )
 }
+
+export interface SponsorHistoryEntry {
+  zoneId: string
+  sponsorName: string
+  sponsorUrl: string | null
+  logoUrl: string | null
+  amountCents: number
+  /** active = wearing it now, outbid = wore it and lost it, won = kept it to the end */
+  status: 'active' | 'outbid' | 'won'
+  at: string
+}
+
+/**
+ * Everyone who has ever actually owned a placement, newest first.
+ *
+ * 'lost' and 'cancelled' are excluded on purpose: a lost bid paid and was
+ * refunded because its logo NEVER went on, and a cancelled one never paid.
+ * Neither was ever an owner, even briefly. Outbid sponsors stay forever —
+ * being displaced is the business model, not an erasure.
+ */
+export async function getSponsorHistory(limit = 100): Promise<SponsorHistoryEntry[]> {
+  const rows = await query<{
+    zone_id: string
+    sponsor_name: string
+    sponsor_url: string | null
+    logo_url: string | null
+    amount_cents: number
+    status: string
+    created_at: Date
+  }>(
+    `select zone_id, sponsor_name, sponsor_url, logo_url, amount_cents, status, created_at
+     from bids
+     where status in ('active', 'outbid', 'won')
+     order by created_at desc
+     limit $1`,
+    [limit],
+  )
+  return rows.map((r) => ({
+    zoneId: r.zone_id,
+    sponsorName: r.sponsor_name,
+    sponsorUrl: r.sponsor_url,
+    logoUrl: r.logo_url,
+    amountCents: r.amount_cents,
+    status: r.status as 'active' | 'outbid' | 'won',
+    at: r.created_at.toISOString(),
+  }))
+}

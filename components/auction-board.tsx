@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { AuctionState, ZoneAuctionState } from '@/lib/auction'
+import type { AuctionState, SponsorHistoryEntry, ZoneAuctionState } from '@/lib/auction'
 import { TIER_COLOR, TIER_LABEL, ZONES, getZone } from '@/lib/zones'
 import { formatMoney } from '@/lib/money'
 import { POLL_INTERVAL_MS } from '@/lib/config'
@@ -19,6 +19,7 @@ interface RecentBid {
 
 interface BoardData extends AuctionState {
   recent?: RecentBid[]
+  history?: SponsorHistoryEntry[]
 }
 
 export function AuctionBoard({ initial }: { initial: BoardData }) {
@@ -123,6 +124,57 @@ export function AuctionBoard({ initial }: { initial: BoardData }) {
           />
         </div>
       </div>
+
+      {/* --- everyone who has ever owned a piece --------------------------- */}
+      {data.history && data.history.length > 0 && (
+        <div className="card-dj mt-8 overflow-hidden">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-hairline2/70 px-5 py-4">
+            <h3 className="text-[22px]">Previously, on my ass</h3>
+            <p className="text-[13px] text-muted">
+              Every company that has ever held a placement. Being outbid gets you off me, not off this list.
+            </p>
+          </div>
+          <ul className="divide-y divide-hairline2/60">
+            {data.history.map((h, i) => (
+              <li key={`${h.at}-${i}`} className="flex items-center gap-4 px-5 py-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-btn border border-hairline bg-white">
+                  {h.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={h.logoUrl} alt="" className="h-full w-full object-contain" />
+                  ) : (
+                    <span aria-hidden className="text-[18px]">🍑</span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    {h.sponsorUrl ? (
+                      <a
+                        href={h.sponsorUrl}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow"
+                        className="truncate font-semibold underline decoration-hairline underline-offset-4 hover:decoration-ink"
+                      >
+                        {h.sponsorName}
+                      </a>
+                    ) : (
+                      <span className="truncate font-semibold">{h.sponsorName}</span>
+                    )}
+                    <span className="text-[13px] text-muted">
+                      {getZone(h.zoneId)?.name ?? h.zoneId} · {formatMoney(h.amountCents)}
+                    </span>
+                  </div>
+                  <div className="text-[12px] text-muted">
+                    {new Date(h.at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </div>
+                </div>
+                {h.status === 'active' && <span className="pill shrink-0 bg-flame text-white">ON ME NOW</span>}
+                {h.status === 'outbid' && <span className="pill shrink-0 bg-canvas text-muted">WORN &amp; OUTBID</span>}
+                {h.status === 'won' && <span className="pill shrink-0 bg-gold text-ink">FINAL OWNER</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* --- the rate card -------------------------------------------------- */}
       <div className="card-dj mt-8 overflow-hidden">

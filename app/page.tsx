@@ -1,7 +1,8 @@
 import { AuctionBoard } from '@/components/auction-board'
+import { LogoMarquee } from '@/components/logo-marquee'
 import { SiteFooter, SiteHeader } from '@/components/sections/chrome'
 import { Faq, HowItWorks, InventoryStrip, Numbers } from '@/components/sections/content'
-import { getAuctionState, type AuctionState } from '@/lib/auction'
+import { getAuctionState, getSponsorHistory, type AuctionState, type SponsorHistoryEntry } from '@/lib/auction'
 import { ZONES } from '@/lib/zones'
 
 // The board is live and the numbers on it are money. Nothing here may be cached.
@@ -40,8 +41,10 @@ function offlineState(): AuctionState {
 
 export default async function Home() {
   let initial: AuctionState
+  let history: SponsorHistoryEntry[] = []
   try {
     initial = await getAuctionState()
+    history = await getSponsorHistory()
   } catch (err) {
     console.error('[page] falling back to offline auction state', err)
     initial = offlineState()
@@ -52,6 +55,8 @@ export default async function Home() {
       <SiteHeader />
 
       <main>
+        <LogoMarquee history={history} />
+
         {/* ---------------------------------------------------------------- */}
         {/*  Hero                                                            */}
         {/* ---------------------------------------------------------------- */}
@@ -93,7 +98,7 @@ export default async function Home() {
         {/*  The auction                                                     */}
         {/* ---------------------------------------------------------------- */}
         <section className="container-dj pb-6">
-          <AuctionBoard initial={initial} />
+          <AuctionBoard initial={{ ...initial, history }} />
         </section>
 
         <HowItWorks />

@@ -82,6 +82,20 @@
   }
 }
 
+/* The sponsor marquee. The track holds its content twice and slides by half
+   its own width, which is what makes the loop seamless. Global reduced-motion
+   handling at the bottom of this file stops it for users who asked for that. */
+.marquee { overflow: hidden; }
+.marquee__track {
+  display: flex;
+  width: max-content;
+  animation: marqueeScroll 36s linear infinite;
+}
+.marquee:hover .marquee__track { animation-play-state: paused; }
+@keyframes marqueeScroll {
+  to { transform: translateX(-50%); }
+}
+
 /* The live-auction dot. Two elements: a solid core and an expanding ring. */
 .live-dot { position: relative; display: inline-block; width: 8px; height: 8px; }
 .live-dot::before,
