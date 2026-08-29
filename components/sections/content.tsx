@@ -62,7 +62,7 @@ const NUMBERS = [
   {
     stat: '~14,000',
     label: 'Weekly impressions',
-    note: 'Estimated generously. Includes a gym, two beaches, one open-plan office and one regrettable work Christmas party.',
+    note: 'A number I made up with complete confidence, in the proud tradition of every out-of-home media pack ever sent. The difference is I am telling you.',
   },
   {
     stat: '2 weeks',

@@ -253,6 +253,20 @@ export async function createBid(input: CreateBidInput): Promise<CreatedBid> {
   if (name.length < 1 || name.length > 80) throw new BidError('Sponsor name is required.', 'invalid')
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new BidError('A real email address, please.', 'invalid')
 
+  // The link is rendered as an href to every visitor, so only web URLs get in.
+  // A javascript: or data: scheme is not a typo to fix quietly — reject loudly.
+  const sponsorUrl = input.sponsorUrl?.trim() || null
+  if (sponsorUrl) {
+    let ok = false
+    try {
+      const parsed = new URL(sponsorUrl)
+      ok = parsed.protocol === 'https:' || parsed.protocol === 'http:'
+    } catch {
+      ok = false
+    }
+    if (!ok) throw new BidError('The link has to be a normal https:// address.', 'invalid')
+  }
+
   return transaction(async (client) => {
     const floor = await lockZoneAndReadFloor(client, input.zoneId)
 
@@ -272,7 +286,7 @@ export async function createBid(input: CreateBidInput): Promise<CreatedBid> {
         input.amountCents,
         name,
         email,
-        input.sponsorUrl?.trim() || null,
+        sponsorUrl,
         input.logoUrl?.trim() || null,
       ],
     )

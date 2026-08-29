@@ -1,4 +1,5 @@
 import type { SponsorHistoryEntry } from '@/lib/auction'
+import { safeHref } from '@/lib/links'
 
 /**
  * The scrolling wall of everyone who has ever been on the ass.
@@ -25,22 +26,40 @@ export function LogoMarquee({ history }: { history: SponsorHistoryEntry[] }) {
 
   const Track = ({ hidden = false }: { hidden?: boolean }) => (
     <div className="flex shrink-0 items-center gap-10 pr-10" aria-hidden={hidden || undefined}>
-      {sponsors.map((s) => (
-        <span key={`${hidden ? 'b' : 'a'}-${s.sponsorName}`} className="flex items-center">
-          {s.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={s.logoUrl}
-              alt={hidden ? '' : s.sponsorName}
-              className="h-8 w-auto max-w-[140px] object-contain opacity-80"
-            />
-          ) : (
-            <span className="whitespace-nowrap text-[15px] font-semibold tracking-[-0.01em] text-muted">
-              {s.sponsorName}
-            </span>
-          )}
-        </span>
-      ))}
+      {sponsors.map((s) => {
+        const href = safeHref(s.sponsorUrl)
+        const inner = s.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={s.logoUrl}
+            alt={hidden ? '' : s.sponsorName}
+            className="h-8 w-auto max-w-[140px] object-contain opacity-80 transition-opacity hover:opacity-100"
+          />
+        ) : (
+          <span className="whitespace-nowrap text-[15px] font-semibold tracking-[-0.01em] text-muted transition-colors hover:text-ink">
+            {s.sponsorName}
+          </span>
+        )
+        return (
+          <span key={`${hidden ? 'b' : 'a'}-${s.sponsorName}`} className="flex items-center">
+            {href ? (
+              // The link they paid for. nofollow keeps this from becoming an
+              // SEO marketplace; the sponsorship is the product, not PageRank.
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                tabIndex={hidden ? -1 : undefined}
+                aria-label={hidden ? undefined : `${s.sponsorName} website`}
+              >
+                {inner}
+              </a>
+            ) : (
+              inner
+            )}
+          </span>
+        )
+      })}
     </div>
   )
 

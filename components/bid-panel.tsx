@@ -7,6 +7,7 @@ import type { ZoneAuctionState } from '@/lib/auction'
 import { TIER_COLOR, TIER_LABEL, type Zone } from '@/lib/zones'
 import { formatMoney, parseMoneyToCents } from '@/lib/money'
 import { ANTI_SNIPE_WINDOW_MS } from '@/lib/config'
+import { safeHref } from '@/lib/links'
 import { Countdown, useIsClosingSoon } from './countdown'
 
 // Loaded once, at module scope — loadStripe injects a script tag and calling it
@@ -151,8 +152,20 @@ export function BidPanel({ zone, state, onBidPlaced, onLogoPreview }: Props) {
 
       {state?.topBid && (
         <p className="mt-3 text-[13px] text-muted">
-          Currently worn by <span className="font-semibold text-ink">{state.topBid.sponsorName}</span>. Pay more
-          and it comes off them and goes on you.
+          Currently worn by{' '}
+          {safeHref(state.topBid.sponsorUrl) ? (
+            <a
+              href={safeHref(state.topBid.sponsorUrl)}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              className="font-semibold text-ink underline decoration-hairline underline-offset-4 hover:decoration-ink"
+            >
+              {state.topBid.sponsorName}
+            </a>
+          ) : (
+            <span className="font-semibold text-ink">{state.topBid.sponsorName}</span>
+          )}
+          . Pay more and it comes off them and goes on you.
         </p>
       )}
 

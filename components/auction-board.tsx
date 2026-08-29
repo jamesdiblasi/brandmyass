@@ -5,6 +5,7 @@ import type { AuctionState, SponsorHistoryEntry, ZoneAuctionState } from '@/lib/
 import { TIER_COLOR, TIER_LABEL, ZONES, getZone } from '@/lib/zones'
 import { formatMoney } from '@/lib/money'
 import { POLL_INTERVAL_MS } from '@/lib/config'
+import { safeHref } from '@/lib/links'
 import { AssPicker } from './ass-picker'
 import { BidPanel } from './bid-panel'
 import { Countdown } from './countdown'
@@ -137,19 +138,31 @@ export function AuctionBoard({ initial }: { initial: BoardData }) {
           <ul className="divide-y divide-hairline2/60">
             {data.history.map((h, i) => (
               <li key={`${h.at}-${i}`} className="flex items-center gap-4 px-5 py-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-btn border border-hairline bg-white">
-                  {h.logoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={h.logoUrl} alt="" className="h-full w-full object-contain" />
+                {(() => {
+                  const href = safeHref(h.sponsorUrl)
+                  const thumb = (
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-btn border border-hairline bg-white">
+                      {h.logoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={h.logoUrl} alt="" className="h-full w-full object-contain" />
+                      ) : (
+                        <span aria-hidden className="text-[18px]">🍑</span>
+                      )}
+                    </div>
+                  )
+                  return href ? (
+                    <a href={href} target="_blank" rel="noopener noreferrer nofollow" aria-label={`${h.sponsorName} website`}>
+                      {thumb}
+                    </a>
                   ) : (
-                    <span aria-hidden className="text-[18px]">🍑</span>
-                  )}
-                </div>
+                    thumb
+                  )
+                })()}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2">
-                    {h.sponsorUrl ? (
+                    {safeHref(h.sponsorUrl) ? (
                       <a
-                        href={h.sponsorUrl}
+                        href={safeHref(h.sponsorUrl)}
                         target="_blank"
                         rel="noopener noreferrer nofollow"
                         className="truncate font-semibold underline decoration-hairline underline-offset-4 hover:decoration-ink"
