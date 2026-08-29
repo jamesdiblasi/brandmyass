@@ -81,6 +81,11 @@ jobs:
         run: |
           az webapp config set -g leadgen -n "$APP_NAME" --startup-file "node server.js" -o none \
             || echo "::warning::could not (re)set the startup command; if the smoke test fails, set it in the Portal: General settings → Startup Command → node server.js"
+          # Always On keeps the app warm. Social-card crawlers (X's included)
+          # time out after a few seconds; a cold start here takes 15+, so a
+          # sleeping app unfurls as no card at all — and X caches that.
+          az webapp config set -g leadgen -n "$APP_NAME" --always-on true -o none \
+            || echo "::warning::could not enable Always On (plan tier may not support it); set it in the Portal: Configuration → General settings → Always on"
 
       - name: Deploy
         uses: azure/webapps-deploy@v3
