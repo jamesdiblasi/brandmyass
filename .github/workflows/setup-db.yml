@@ -52,6 +52,14 @@ name: Provision Brand My Ass infrastructure
 # The shared plan cuts the other way too, helpfully: the firewall already admits
 # the App Service outbound addresses, because the dashboard connects from them.
 
+# NOTE FOR THIS STANDALONE REPO: everything below has ALREADY RUN — the
+# database exists, is migrated and seeded, and the App Service holds its
+# credentials. This workflow only matters again when migrations/ gains a new
+# file, and it needs two secrets this repo does not start with:
+# DATABASE_ADMIN_URL (the migrating role) and AZURE_CREDENTIALS (only for the
+# App-Service handover steps). Until then its push trigger is limited to
+# migrations/**, so it stays dormant.
+
 on:
   push:
     branches: [main]

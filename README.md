@@ -198,17 +198,25 @@ forgetting to run it costs nobody anything.
 
 ## Repository secrets
 
-This repo deploys itself; these live in Settings → Secrets and variables →
-Actions. All were previously secrets on `leadnet-dashboard` — copy the values
-across.
+One. GitHub secrets are write-only, so nothing here asks you to copy a value
+out of another repo — that is impossible by design.
 
-| Name | Kind | Needed for |
-| --- | --- | --- |
-| `AZURE_CREDENTIALS` | secret | every deploy (same service principal the dashboard uses) |
-| `BMA_STRIPE_SECRET_KEY` | secret | applying the Stripe key to the App Service |
-| `BMA_STRIPE_WEBHOOK_SECRET` | secret | same, for signature verification |
-| `DATABASE_ADMIN_URL` | secret | only the database workflow — role/migration re-runs |
-| `BMA_DATABASE_URL` | secret | optional; the DB workflow normally provisions this itself |
+| Name | Where to get it |
+| --- | --- |
+| `AZURE_WEBAPP_PUBLISH_PROFILE` | Azure Portal → **brandmyass-app** → Overview → *Download publish profile* → paste the whole file. Scoped to this one web app. If the button is greyed out: Configuration → General settings → *SCM Basic Auth Publishing* → On. |
+
+Runtime settings do not flow through GitHub at all. `DATABASE_URL` and the
+storage connection are already on the App Service; the Stripe keys go straight
+into the Portal (**brandmyass-app → Environment variables**):
+
+| Setting | Value |
+| --- | --- |
+| `STRIPE_SECRET_KEY` | the restricted `rk_…` (PaymentIntents write only) |
+| `STRIPE_WEBHOOK_SECRET` | the `whsec_…` from the webhook endpoint |
+
+`setup-db.yml` is dormant — everything it provisions already exists. It wakes
+only if `migrations/` changes, and then needs `DATABASE_ADMIN_URL` (and
+`AZURE_CREDENTIALS` for its App-Service steps) added first.
 
 ## Known gaps
 

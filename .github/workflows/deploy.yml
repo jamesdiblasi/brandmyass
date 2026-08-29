@@ -1,50 +1,36 @@
 name: Deploy Brand My Ass to Azure App Service
 
-# Ships brandmyass/ to its own Azure App Service, reusing the credentials and
-# the App Service Plan the dashboard already has.
+# Deploys to the existing brandmyass-app App Service using a PUBLISH PROFILE —
+# a credential downloaded from the Azure Portal that can deploy to this one web
+# app and do nothing else in the subscription.
 #
-# Why this is a separate workflow from deploy.yml: brandmyass is a standalone
-# app with its own package.json, its own database and its own release cadence.
-# Coupling it to the dashboard's pipeline would mean a copywriting tweak on a
-# joke website could hold up a dashboard release, or worse, run the dashboard's
-# migrations.
+# Why not azure/login with AZURE_CREDENTIALS, like the parent repo: that secret
+# is a subscription-scoped service principal, GitHub secrets are write-only, and
+# the person setting this repo up could not read the value out of the old repo
+# to copy it across. A publish profile is self-service (one download, one
+# paste), far narrower, and everything the old login powered — resource-group
+# discovery, creating the web app, applying settings — is one-time provisioning
+# that has already happened.
 #
-# It deliberately does NOT run database migrations. The site is built to fall
-# back to an offline board when DATABASE_URL is absent, so it deploys and
-# renders correctly before the database exists. Create the database separately
-# with `npm run db:setup` from brandmyass/ — that needs admin credentials a
-# deploy should not be carrying.
+# ONE repository secret:
+#   * AZURE_WEBAPP_PUBLISH_PROFILE — Azure Portal → brandmyass-app → Overview →
+#     "Download publish profile"; paste the FILE'S ENTIRE CONTENTS (it is XML).
+#     If the download button is greyed out: Configuration → General settings →
+#     SCM Basic Auth Publishing → On, then retry.
 #
-# PREREQUISITE — one repository secret, which the dashboard already uses:
-#   * AZURE_CREDENTIALS   service-principal JSON for azure/login
+# Runtime configuration does NOT flow through this repo. DATABASE_URL and the
+# storage connection were provisioned onto the App Service by the old infra
+# workflow and persist there; STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are
+# set by hand in the Portal (brandmyass-app → Environment variables), which is
+# where they live at runtime anyway.
 #
-# OPTIONAL secrets. Each is only applied if non-empty, so the first deploy works
-# with none of them set and the site comes up in offline mode:
-#   * BMA_DATABASE_URL                    app role against the brandmyass database
-#   * BMA_STRIPE_SECRET_KEY
-#   * BMA_STRIPE_WEBHOOK_SECRET           from the endpoint you register by hand
-#
-# Stripe setup is deliberately MANUAL and one-off — a dedicated Stripe account
-# for this site, a restricted key, and a webhook endpoint registered in the
-# Stripe Dashboard. The three steps live in brandmyass/README.md. There used to
-# be a workflow that automated all of this against the shared account; it was
-# more machinery than a one-time task deserves and it is gone.
-#
-# THE PUBLISHABLE KEY IS DIFFERENT FROM THE OTHER TWO, AND THE DIFFERENCE BITES
+# THE PUBLISHABLE KEY IS A BUILD INPUT, NOT A RUNTIME SETTING
 #
 # NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is compiled INTO the client bundle by
-# `next build`. It has to be present at BUILD time; as a runtime App Service
-# setting it does nothing at all, and the failure is silent — the setting is
-# there, the app starts cleanly, and the card form never renders. A publishable
-# key is public (it ships in every visitor's JavaScript), so it is a repository
-# VARIABLE, not a secret:
-#
-#   * BMA_STRIPE_PUBLISHABLE_KEY   repository variable, pk_test_… or pk_live_…
-#
-# OPTIONAL repository variable:
-#   * BRANDMYASS_APP_NAME   defaults to brandmyass-app. Azure web-app names are
-#                           globally unique across azurewebsites.net, so set this
-#                           if the default is taken.
+# `next build`; as an App Service setting it does nothing, silently. It is
+# public by design (it ships in every visitor's JavaScript), so the live value
+# is a literal below; the BMA_STRIPE_PUBLISHABLE_KEY repository variable
+# overrides it, which is the path for swapping to test keys.
 
 on:
   push:
@@ -57,21 +43,21 @@ concurrency:
 
 env:
   APP_NAME: ${{ vars.BRANDMYASS_APP_NAME || 'brandmyass-app' }}
-  REFERENCE_APP: leadnet-dashboard-app
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     name: Build and deploy
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check the Azure credential is present
+      - name: Check the publish profile is present
         env:
-          CREDS: ${{ secrets.AZURE_CREDENTIALS }}
+          PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         run: |
-          if [ -z "$CREDS" ]; then
-            echo "::error::AZURE_CREDENTIALS is not set. It is the same secret deploy.yml uses."
+          if [ -z "$PROFILE" ]; then
+            echo "::error::AZURE_WEBAPP_PUBLISH_PROFILE is not set. Azure Portal → ${APP_NAME} → Overview → 'Download publish profile', then paste the file's contents as a repository secret of that name."
             exit 1
           fi
 
@@ -83,114 +69,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Find the dashboard's resource group and App Service Plan
-        # Reusing the existing plan rather than creating one: an App Service Plan
-        # is the thing that costs money, and an extra app on a plan already paid
-        # for is free.
-        #
-        # Two calls, not one. `az webapp list` is the only way to find the
-        # resource group without already knowing it, but its list projection
-        # does NOT include appServicePlanId — asking for it yields null, and
-        # `az webapp create -p null` fails with "The plan 'null' doesn't exist".
-        # Once the group is known, `az webapp show` can be asked for the plan.
-        run: |
-          set -euo pipefail
-
-          INFO=$(az webapp list \
-            --query "[?name=='${REFERENCE_APP}'] | [0].{rg:resourceGroup, loc:location}" -o json)
-          if [ -z "$INFO" ] || [ "$INFO" = "null" ]; then
-            echo "::error::Could not find ${REFERENCE_APP}. Does this service principal have access to that subscription?"
-            exit 1
-          fi
-          RG=$(echo "$INFO" | jq -r .rg)
-          echo "Found ${REFERENCE_APP} in ${RG} ($(echo "$INFO" | jq -r .loc))"
-
-          # appServicePlanId is the documented field, but the underlying ARM
-          # property is serverFarmId and which one surfaces varies by CLI
-          # version. Try both, then fall back to the group's only plan.
-          # Written as plain ifs on purpose. `[ a ] || [ b ] && cmd` returns
-          # non-zero when both tests fail, which under `set -e` kills the step
-          # precisely when the first lookup already succeeded.
-          PLAN=$(az webapp show -g "$RG" -n "$REFERENCE_APP" --query "appServicePlanId" -o tsv 2>/dev/null || true)
-          if [ -z "$PLAN" ] || [ "$PLAN" = "null" ]; then
-            PLAN=$(az webapp show -g "$RG" -n "$REFERENCE_APP" --query "serverFarmId" -o tsv 2>/dev/null || true)
-          fi
-          if [ -z "$PLAN" ] || [ "$PLAN" = "null" ]; then
-            PLAN=$(az appservice plan list -g "$RG" --query "[0].id" -o tsv 2>/dev/null || true)
-          fi
-          if [ -z "$PLAN" ] || [ "$PLAN" = "null" ]; then
-            echo "::error::Could not resolve an App Service Plan in ${RG}."
-            exit 1
-          fi
-
-          # The runtime flag below is Linux-only, so fail loudly here rather than
-          # with a confusing error from `az webapp create`.
-          KIND=$(az appservice plan show --ids "$PLAN" --query "{os:kind, sku:sku.name}" -o json)
-          echo "Plan: ${PLAN##*/}  ${KIND}"
-
-          echo "RG=$RG"     >> "$GITHUB_ENV"
-          echo "PLAN=$PLAN" >> "$GITHUB_ENV"
-
-      - name: Create the web app if it does not exist
-        run: |
-          set -euo pipefail
-          if az webapp show -g "$RG" -n "$APP_NAME" >/dev/null 2>&1; then
-            echo "· ${APP_NAME} already exists"
-          else
-            echo "→ creating ${APP_NAME} on the existing plan"
-            az webapp create -g "$RG" -p "$PLAN" -n "$APP_NAME" --runtime "NODE:22-lts"
-          fi
-          # Standalone output emits server.js at the package root.
-          az webapp config set -g "$RG" -n "$APP_NAME" --startup-file "node server.js" -o none
-
       - name: Build
-        # NEXT_PUBLIC_* is compiled INTO the client bundle, so the publishable
-        # key has to be present HERE rather than as an App Service setting —
-        # set only at runtime it does nothing and the card form silently never
-        # renders. It comes from a repository variable because it is public.
-        # The literal fallback below is not a leaked secret: a publishable key
-        # is PUBLIC by design — it is compiled into the bundle and visible to
-        # every visitor. Committing it here is how it gets into the build
-        # without anyone needing repo-settings access. The repository variable
-        # still wins if one is ever set (e.g. to swap to test keys).
+        # The literal fallback is not a leaked secret — a publishable key is
+        # public by design. See the header.
         run: npm run build
         env:
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ vars.BMA_STRIPE_PUBLISHABLE_KEY || 'pk_live_51U9YEWAuZlGu5qZOeMg02FkrZoPI27dqrYDI64jh5MoySc8XGrio7T6luRaPED7DFVm3cTjmsHVwSM2zs1sNZbMv00rbn2jV8T' }}
-
-      - name: Apply runtime settings
-        # Only non-empty values are sent. Writing an empty DATABASE_URL would be
-        # worse than leaving it unset: the app would try to connect to "" and
-        # throw on every request instead of falling back to the offline board.
-        env:
-          BMA_DATABASE_URL: ${{ secrets.BMA_DATABASE_URL }}
-          BMA_STRIPE_SECRET_KEY: ${{ secrets.BMA_STRIPE_SECRET_KEY }}
-          BMA_STRIPE_WEBHOOK_SECRET: ${{ secrets.BMA_STRIPE_WEBHOOK_SECRET }}
-        run: |
-          set -euo pipefail
-          SETTINGS=()
-          add() { if [ -n "$2" ]; then SETTINGS+=("$1=$2"); else echo "· skipping $1 (not set)"; fi; }
-
-          add DATABASE_URL          "${BMA_DATABASE_URL:-}"
-          add STRIPE_SECRET_KEY     "${BMA_STRIPE_SECRET_KEY:-}"
-          add STRIPE_WEBHOOK_SECRET "${BMA_STRIPE_WEBHOOK_SECRET:-}"
-          SETTINGS+=("PUBLIC_BASE_URL=https://${APP_NAME}.azurewebsites.net")
-
-          az webapp config appsettings set -g "$RG" -n "$APP_NAME" \
-            --settings "${SETTINGS[@]}" -o none
-          echo "✓ applied ${#SETTINGS[@]} settings"
 
       - name: Deploy
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.APP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           # The standalone folder is the entire deployable app: server.js, the
           # traced node_modules, and the .next/static + public that the build
-          # script copies in (Next does not do that itself).
+          # script copies in (Next does not do that itself). The App Service's
+          # startup command, `node server.js`, was set at provisioning time and
+          # persists.
           package: .next/standalone
 
       - name: Smoke test
